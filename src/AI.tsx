@@ -25,6 +25,36 @@ export async function compressImage(file: File) {
     URL.revokeObjectURL(url);
   }
 }
+function productFromLabel(
+  label: NonNullable<ReturnType<typeof aiSchema.parse>["label"]>,
+  ar: boolean,
+): Product {
+  const nutrients = {
+    ...label.nutrients,
+    kcal:
+      label.nutrients.kcal === null
+        ? null
+        : label.energyUnit === "kJ"
+          ? label.nutrients.kcal / 4.184
+          : label.nutrients.kcal,
+  };
+  const normalized = normalize(
+    nutrients,
+    label.basis,
+    label.servingSize,
+    label.servingUnit,
+  );
+  return {
+    id: crypto.randomUUID(),
+    name: label.name || (ar ? "منتج جديد" : "New product"),
+    ...normalized,
+    source: "Gemini label · review required",
+    original: label,
+    favorite: false,
+    lastQuantity: 100,
+    portion: label.servingSize,
+  };
+}
 export default function AI({
   ar,
   initialMode,
@@ -120,7 +150,22 @@ export default function AI({
               },
             );
             if (!r.ok) throw Error(String(r.status));
-            setResult(aiSchema.parse(await r.json()));
+            const parsed = aiSchema.parse(await r.json());
+            setResult(parsed);
+            if (
+              mode === "label" &&
+              parsed.label &&
+              (parsed.label.basis !== "serving" ||
+                (parsed.label.servingSize !== null &&
+                  parsed.label.servingUnit !== null))
+            ) {
+              try {
+                onProduct(productFromLabel(parsed.label, ar));
+                setResult(null);
+              } catch {
+                // Keep the extraction visible so a missing serving size can be reviewed.
+              }
+            }
             setFile(null);
           } catch {
             setError(
@@ -305,32 +350,7 @@ export default function AI({
               <button
                 onClick={() => {
                   try {
-                    const l = result.label!;
-                    const n = {
-                      ...l.nutrients,
-                      kcal:
-                        l.nutrients.kcal === null
-                          ? null
-                          : l.energyUnit === "kJ"
-                            ? l.nutrients.kcal / 4.184
-                            : l.nutrients.kcal,
-                    };
-                    const normalized = normalize(
-                      n,
-                      l.basis,
-                      l.servingSize,
-                      l.servingUnit,
-                    );
-                    onProduct({
-                      id: crypto.randomUUID(),
-                      name: l.name || (ar ? "منتج جديد" : "New product"),
-                      ...normalized,
-                      source: "Gemini label · review required",
-                      original: l,
-                      favorite: false,
-                      lastQuantity: 100,
-                      portion: l.servingSize,
-                    });
+                    onProduct(productFromLabel(result.label!, ar));
                     setResult(null);
                   } catch {
                     setError(
