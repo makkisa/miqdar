@@ -1,0 +1,49 @@
+{
+  "name": "makkihero",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "server": "tsx server/index.ts"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@zxing/browser": "^0.1.5",
+    "express": "^5.1.0",
+    "firebase": "^12.0.0",
+    "firebase-admin": "^14.5.1",
+    "idb": "^8.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "web-vitals": "^5.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@playwright/test": "^1.51.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "fake-indexeddb": "^6.2.8",
+    "lighthouse": "^13.6.0",
+    "prettier": "^3.10.1",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.0",
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^5.1.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6",
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1"
+  }
+}
