@@ -381,7 +381,7 @@ export default function App() {
                     </label>
                   </div>
                   <div className="dashboard">
-                    <section className="calorie-card">
+                    <section className="calorie-card calorie-compact">
                       <div className="card-top">
                         <span>{t("السعرات الحرارية", "Daily calories")}</span>
                         <Activity size={22} />
@@ -489,18 +489,9 @@ export default function App() {
                         </small>
                       </span>
                     </button>
-                    <button onClick={() => setEditor({})}>
-                      <Plus />
-                      <span>
-                        <strong>{t("تسجيل يدوي", "Log manually")}</strong>
-                        <small>
-                          {t("وجبتك، بتفاصيلها", "Make every meal count")}
-                        </small>
-                      </span>
-                    </button>
                   </div>
                   <div className="lower-grid">
-                    <section className="panel">
+                    <section className="panel day-meals">
                       <div className="card-top">
                         <h2>{t("سجل اليوم", "Today’s food")}</h2>
                         <span className="pill">
@@ -571,9 +562,9 @@ export default function App() {
                         </div>
                       )}
                     </section>
-                    <section className="panel">
+                    <section className="panel library-nudge">
                       <div className="card-top">
-                        <h2>{t("إضافة سريعة", "Quick add")}</h2>
+                        <h2>{t("مكتبتي", "Food library")}</h2>
                         <button
                           onClick={() => setPage("library")}
                           aria-label={t("المكتبة", "Library")}
