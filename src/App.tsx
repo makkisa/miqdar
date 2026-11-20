@@ -11,7 +11,6 @@ import {
   Star,
   Trash2,
   Pencil,
-  ChevronLeft,
   Cloud,
   WifiOff,
   Check,
@@ -27,7 +26,6 @@ import {
 import { auth, cloud, configured, login, redirectResult } from "./firebase";
 import { subscribe, save, type Data } from "./store";
 import {
-  backupSchema,
   localDate,
   scale,
   type Product,
@@ -60,6 +58,7 @@ export default function App() {
     p?: Product;
     q?: number;
     entry?: Entry;
+    meal?: Entry["meal"];
   } | null>(null);
   const [query, setQuery] = useState("");
   const [similar, setSimilar] = useState<Product[]>([]);
@@ -117,6 +116,23 @@ export default function App() {
     } catch {}
   }, [uid]);
   useEffect(() => {
+    try {
+      const value = JSON.parse(
+        localStorage.getItem(`macro-ratios-${uid ?? "guest"}`) || "null",
+      );
+      if (
+        value &&
+        [value.protein, value.carbs, value.fat].every(
+          (n) => Number.isFinite(n) && n >= 0 && n <= 100,
+        )
+      )
+        setRatios(value);
+      else setRatios({ protein: 25, carbs: 45, fat: 30 });
+    } catch {
+      setRatios({ protein: 25, carbs: 45, fat: 30 });
+    }
+  }, [uid]);
+  useEffect(() => {
     const f = () => setOnline(navigator.onLine);
     window.addEventListener("online", f);
     window.addEventListener("offline", f);
@@ -154,6 +170,7 @@ export default function App() {
     q: number,
     entry?: Entry,
     operationId?: string,
+    meal: Entry["meal"] = entry?.meal ?? "lunch",
   ) {
     if (Object.values(p.nutrients).some((n) => n === null)) {
       setEditor({ p, q, entry });
@@ -166,6 +183,7 @@ export default function App() {
       date: entry?.date ?? date,
       createdAt: entry?.createdAt ?? Date.now(),
       deleted: false,
+      meal,
     };
     await save(uid, "entries", e, fail);
     await save(uid, "products", { ...p, lastQuantity: q }, fail);
@@ -426,45 +444,34 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                      <div className="card-foot">
-                        {entries.length === 0
-                          ? t(
-                              "بداية جديدة. سجّل وجبتك الأولى.",
-                              "A fresh start. Log your first meal.",
-                            )
-                          : t(
-                              `${entries.length} أطعمة مسجلة اليوم`,
-                              `${entries.length} foods logged today`,
-                            )}
-                      </div>
-                    </section>
-                    <section className="macro-card panel">
-                      <div className="card-top">
-                        <h2>{t("الماكروز", "Your macros")}</h2>
-                        <span className="muted">g</span>
-                      </div>
-                      {(["protein", "carbs", "fat"] as const).map((k, i) => (
-                        <div className={`macro macro-${i}`} key={k}>
-                          <div>
-                            <span>
-                              <i />
-                              {t(
-                                ["البروتين", "الكربوهيدرات", "الدهون"][i],
-                                ["Protein", "Carbs", "Fat"][i],
-                              )}
-                            </span>
-                            <b>
-                              {Math.round(totals[k] ?? 0)}{" "}
-                              <small>/ {goals[k]}</small>
-                            </b>
-                          </div>
-                          <progress value={totals[k] ?? 0} max={goals[k]} />
-                          <small>
-                            {t("المتبقي", "Remaining")}{" "}
-                            {Math.round(remaining[k] ?? 0)} g
-                          </small>
+                      <section className="macro-card">
+                        <div className="card-top">
+                          <h2>{t("الماكروز", "Your macros")}</h2>
+                          <span className="muted">g</span>
                         </div>
-                      ))}
+                        {(["protein", "carbs", "fat"] as const).map((k, i) => (
+                          <div className={`macro macro-${i}`} key={k}>
+                            <div>
+                              <span>
+                                <i />
+                                {t(
+                                  ["البروتين", "الكربوهيدرات", "الدهون"][i],
+                                  ["Protein", "Carbs", "Fat"][i],
+                                )}
+                              </span>
+                              <b>
+                                {Math.round(totals[k] ?? 0)}{" "}
+                                <small>/ {goals[k]}</small>
+                              </b>
+                            </div>
+                            <progress value={totals[k] ?? 0} max={goals[k]} />
+                            <small>
+                              {t("المتبقي", "Remaining")}{" "}
+                              {Math.round(remaining[k] ?? 0)} g
+                            </small>
+                          </div>
+                        ))}
+                      </section>
                     </section>
                   </div>
                   <div className="quick-actions">
@@ -491,105 +498,78 @@ export default function App() {
                     </button>
                   </div>
                   <div className="lower-grid">
-                    <section className="panel day-meals">
-                      <div className="card-top">
-                        <h2>{t("سجل اليوم", "Today’s food")}</h2>
-                        <span className="pill">
-                          {entries.length} {t("أطعمة", "items")}
-                        </span>
-                      </div>
-                      {entries.length ? (
-                        entries.map((e) => (
-                          <div className="food-row" key={e.id}>
-                            <div className="food-icon">
-                              <BookOpen size={20} />
-                            </div>
-                            <div className="food-name">
-                              <strong>{e.product.name}</strong>
-                              <small>
-                                {e.quantity} {e.product.basis} ·{" "}
-                                {Math.round(
-                                  scale(e.product.nutrients, e.quantity).kcal ??
-                                    0,
-                                )}{" "}
-                                kcal
-                              </small>
-                            </div>
-                            <button
-                              aria-label={t("تعديل", "Edit")}
-                              onClick={() =>
-                                setEditor({
-                                  p: e.product,
-                                  q: e.quantity,
-                                  entry: e,
-                                })
-                              }
-                            >
-                              <Pencil size={17} />
-                            </button>
-                            <button
-                              aria-label={t("حذف", "Delete")}
-                              onClick={() => void remove(e).catch(fail)}
-                            >
-                              <Trash2 size={17} />
-                            </button>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="empty">
-                          <div className="empty-icon">
-                            <BookOpen size={30} />
-                          </div>
-                          <h3>
-                            {t(
-                              "يومك يبدأ بأول وجبة",
-                              "Your day starts with a meal",
-                            )}
-                          </h3>
-                          <p>
-                            {t(
-                              "أضف ما أكلته، وسنحسب الباقي.",
-                              "Add what you ate. We’ll do the math.",
-                            )}
-                          </p>
-                          <button
-                            className="text-button"
-                            onClick={() => setEditor({})}
-                          >
-                            {t("سجّل طعامك الأول", "Log your first food")}{" "}
-                            <Plus size={16} />
-                          </button>
-                        </div>
-                      )}
-                    </section>
-                    <section className="panel library-nudge">
-                      <div className="card-top">
-                        <h2>{t("مكتبتي", "Food library")}</h2>
-                        <button
-                          onClick={() => setPage("library")}
-                          aria-label={t("المكتبة", "Library")}
-                        >
-                          <ChevronLeft size={20} />
-                        </button>
-                      </div>
-                      <p className="muted">
-                        {t(
-                          "أطعمتك المفضلة والأخيرة، بضغطة.",
-                          "Your favorites and recent foods, one tap away.",
-                        )}
-                      </p>
-                      {recent.length ? (
-                        recent.slice(0, 4).map(productRow)
-                      ) : (
-                        <div className="empty compact">
-                          <Star size={26} />
-                          <p>
-                            {t(
-                              "أطعمتك المتكررة ستظهر هنا بعد تسجيلها.",
-                              "Your go-to foods will appear here after logging.",
-                            )}
-                          </p>
-                        </div>
+                    <section className="day-meals">
+                      {(["breakfast", "lunch", "dinner"] as const).map(
+                        (meal) => {
+                          const mealEntries = entries.filter(
+                            (entry) => entry.meal === meal,
+                          );
+                          const mealName = {
+                            breakfast: t("الفطور", "Breakfast"),
+                            lunch: t("الغداء", "Lunch"),
+                            dinner: t("العشاء", "Dinner"),
+                          }[meal];
+                          return (
+                            <section className="panel meal-section" key={meal}>
+                              <div className="card-top">
+                                <h2>{mealName}</h2>
+                                <button
+                                  className="meal-add"
+                                  aria-label={`${t("إضافة إلى", "Add to")} ${mealName}`}
+                                  onClick={() => setEditor({ meal })}
+                                >
+                                  <Plus size={18} />
+                                </button>
+                              </div>
+                              {mealEntries.length ? (
+                                mealEntries.map((e) => (
+                                  <div className="food-row" key={e.id}>
+                                    <div className="food-icon">
+                                      <BookOpen size={20} />
+                                    </div>
+                                    <div className="food-name">
+                                      <strong>{e.product.name}</strong>
+                                      <small>
+                                        {e.quantity} {e.product.basis} ·{" "}
+                                        {Math.round(
+                                          scale(e.product.nutrients, e.quantity)
+                                            .kcal ?? 0,
+                                        )}{" "}
+                                        kcal
+                                      </small>
+                                    </div>
+                                    <button
+                                      aria-label={t("تعديل", "Edit")}
+                                      onClick={() =>
+                                        setEditor({
+                                          p: e.product,
+                                          q: e.quantity,
+                                          entry: e,
+                                          meal: e.meal,
+                                        })
+                                      }
+                                    >
+                                      <Pencil size={17} />
+                                    </button>
+                                    <button
+                                      aria-label={t("حذف", "Delete")}
+                                      onClick={() => void remove(e).catch(fail)}
+                                    >
+                                      <Trash2 size={17} />
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <button
+                                  className="meal-empty"
+                                  onClick={() => setEditor({ meal })}
+                                >
+                                  {t("أضف وجبة", "Add food")}
+                                </button>
+                              )}
+                            </section>
+                          );
+                        },
                       )}
                     </section>
                   </div>
@@ -735,8 +715,8 @@ export default function App() {
                     {uid
                       ? auth?.currentUser?.email
                       : t(
-                          "وضع الضيف: محفوظ محليًا فقط. صدّر نسخة احتياطية قبل تغيير الجهاز.",
-                          "Guest mode: saved locally only. Export a backup before switching devices.",
+                          "وضع الضيف يحفظ البيانات على هذا الجهاز فقط.",
+                          "Guest mode saves data on this device only.",
                         )}
                   </p>
                   {!uid ? (
@@ -796,8 +776,8 @@ export default function App() {
                   </h2>
                   <p className="muted">
                     {t(
-                      "حدّد السعرات ثم وزّعها على الماكروز. الغرامات تتحدث مباشرة ومجموع النسب 100٪.",
-                      "Set calories, then split them across macros. Grams update instantly; ratios total 100%.",
+                      "حدد هدف السعرات، ثم عدّل نسب الماكروز؛ الغرامات تتغير فورًا.",
+                      "Set a calorie target and adjust macro shares; grams update instantly.",
                     )}
                   </p>
                   <div className="grid2">
@@ -855,24 +835,13 @@ export default function App() {
                             max="100"
                             value={ratios[key]}
                             onChange={(e) => {
-                              const value = Number(e.target.value),
-                                other = (
-                                  ["protein", "carbs", "fat"] as const
-                                ).filter((k) => k !== key),
-                                sum = ratios[other[0]] + ratios[other[1]],
-                                rest = 100 - value;
                               const next = {
                                 ...ratios,
-                                [key]: value,
-                                [other[0]]: sum
-                                  ? Math.round((rest * ratios[other[0]]) / sum)
-                                  : Math.round(rest / 2),
-                                [other[1]]: 0,
+                                [key]: Number(e.target.value),
                               };
-                              next[other[1]] = 100 - next[key] - next[other[0]];
                               setRatios(next);
                               localStorage.setItem(
-                                `macro-ratios-${uid}`,
+                                `macro-ratios-${uid ?? "guest"}`,
                                 JSON.stringify(next),
                               );
                               const g = {
@@ -895,74 +864,17 @@ export default function App() {
                         </label>
                       );
                     })}
-                    <p className="muted">
+                    <p
+                      className={`ratio-total ${ratios.protein + ratios.carbs + ratios.fat > 100 ? "over" : ""}`}
+                      aria-live="polite"
+                    >
+                      {t("مجموع النسب", "Total ratio")}{" "}
+                      {ratios.protein + ratios.carbs + ratios.fat}٪ ·{" "}
                       {t(
-                        "مجموع النسب 100٪ · السعرات محسوبة من الماكروز",
-                        "Ratios total 100% · calories calculated from macros",
+                        "السعرات محسوبة من الماكروز",
+                        "Calories calculated from macros",
                       )}
                     </p>
-                  </div>
-                  <h2>{t("نسختك الاحتياطية", "Your backup")}</h2>
-                  <div className="row">
-                    <button
-                      onClick={() => {
-                        const blob = new Blob(
-                          [
-                            JSON.stringify(
-                              {
-                                version: 1,
-                                entries: data.entries,
-                                products: data.products,
-                              },
-                              null,
-                              2,
-                            ),
-                          ],
-                          { type: "application/json" },
-                        );
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `مِقدر-${date}.json`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      }}
-                    >
-                      {t("تصدير JSON", "Export JSON")}
-                    </button>
-                    <label className="file-button">
-                      {t("استيراد JSON", "Import JSON")}
-                      <input
-                        type="file"
-                        accept="application/json"
-                        onChange={async (e) => {
-                          try {
-                            const f = e.target.files?.[0];
-                            if (!f) return;
-                            if (f.size > 10000000) throw Error("size");
-                            const backup = backupSchema.parse(
-                              JSON.parse(await f.text()),
-                            );
-                            const existing = new Set(
-                              data.entries.map((x) => x.id),
-                            );
-                            for (const row of backup.entries)
-                              if (!existing.has(row.id))
-                                await save(uid, "entries", row, fail);
-                            const products = new Set(
-                              data.products.map((x) => x.id),
-                            );
-                            for (const p of backup.products)
-                              if (!products.has(p.id))
-                                await save(uid, "products", p, fail);
-                          } catch {
-                            fail();
-                          } finally {
-                            e.target.value = "";
-                          }
-                        }}
-                      />
-                    </label>
                   </div>
                   <h2>{t("التثبيت على iPhone", "Install on iPhone")}</h2>
                   <p>
@@ -981,8 +893,8 @@ export default function App() {
                           if (
                             !confirm(
                               t(
-                                "حذف جميع بيانات الحساب نهائيًا؟ صدّر نسخة أولًا إن أردت.",
-                                "Permanently delete all account data? Export a backup first if needed.",
+                                "حذف جميع بيانات الحساب نهائيًا؟",
+                                "Permanently delete all account data?",
                               ),
                             )
                           )
@@ -1054,8 +966,9 @@ export default function App() {
             product={editor.p}
             quantity={editor.q}
             onClose={() => setEditor(null)}
-            onSave={(p, q, operationId) =>
-              record(p, q, editor.entry, operationId)
+            meal={editor.meal ?? editor.entry?.meal}
+            onSave={(p, q, operationId, meal) =>
+              record(p, q, editor.entry, operationId, meal)
             }
           />
         </Suspense>

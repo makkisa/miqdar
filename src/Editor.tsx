@@ -13,13 +13,21 @@ export default function Editor({
   onSave,
   onClose,
   ar,
+  meal,
 }: {
   product?: Product;
   quantity?: number;
-  onSave: (p: Product, q: number, operationId: string) => Promise<void>;
+  meal?: "breakfast" | "lunch" | "dinner";
+  onSave: (
+    p: Product,
+    q: number,
+    operationId: string,
+    meal: "breakfast" | "lunch" | "dinner",
+  ) => Promise<void>;
   onClose: () => void;
   ar: boolean;
 }) {
+  const [selectedMeal, setSelectedMeal] = useState(meal ?? "lunch");
   const [p, setP] = useState<Product>(
     product ?? {
       id: crypto.randomUUID(),
@@ -130,6 +138,7 @@ export default function Editor({
                 }),
                 q,
                 operationId,
+                selectedMeal,
               );
               onClose();
             } catch {
@@ -142,6 +151,19 @@ export default function Editor({
             }
           }}
         >
+          <label>
+            {ar ? "الوجبة" : "Meal"}
+            <select
+              value={selectedMeal}
+              onChange={(e) =>
+                setSelectedMeal(e.target.value as typeof selectedMeal)
+              }
+            >
+              <option value="breakfast">{ar ? "الفطور" : "Breakfast"}</option>
+              <option value="lunch">{ar ? "الغداء" : "Lunch"}</option>
+              <option value="dinner">{ar ? "العشاء" : "Dinner"}</option>
+            </select>
+          </label>
           <label>
             {ar ? "اسم الطعام" : "Food name"}
             <input

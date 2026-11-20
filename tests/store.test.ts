@@ -8,6 +8,7 @@ const entry: Entry = {
   date: "2026-11-20",
   createdAt: 1,
   deleted: false,
+  meal: "lunch",
   quantity: 100,
   product: {
     id: "p",

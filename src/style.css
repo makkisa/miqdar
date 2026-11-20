@@ -1091,6 +1091,129 @@ pre {
     font-size: 13px;
   }
 }
+
+/* Compact daily overview: calories and macros share one calm card. */
+.calorie-compact {
+  grid-column: 1 / -1;
+  padding: 16px 18px;
+  background: linear-gradient(145deg, #222b4a, #171e32);
+  border-color: #333d59;
+}
+.calorie-compact .calorie-content {
+  justify-content: flex-start;
+  gap: 20px;
+  padding: 14px 0;
+}
+.calorie-compact .ring {
+  width: 92px;
+  padding: 5px;
+}
+.calorie-compact .ring strong {
+  font-size: 21px;
+}
+.calorie-compact .ring .muted {
+  font-size: 8px;
+}
+.calorie-compact .calorie-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.calorie-compact .calorie-stats strong {
+  font-size: 19px;
+}
+.calorie-compact .calorie-stats b {
+  font-size: 15px;
+}
+.calorie-compact .card-foot {
+  border-color: #323b53;
+  padding-top: 9px;
+}
+.calorie-compact .macro-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  border-top: 1px solid #323b53;
+  margin-top: 12px;
+  padding-top: 10px;
+}
+.calorie-compact .macro-card > .card-top {
+  display: none;
+}
+.calorie-compact .macro {
+  min-width: 0;
+  margin: 0;
+}
+.calorie-compact .macro > div {
+  gap: 4px;
+  font-size: 11px;
+}
+.calorie-compact .macro > div > b {
+  font-size: 11px;
+}
+.calorie-compact .macro progress {
+  height: 5px;
+  margin: 5px 0 2px;
+}
+.calorie-compact .macro > small {
+  font-size: 10px;
+}
+.day-meals {
+  display: grid;
+  gap: 12px;
+}
+.meal-section {
+  padding: 16px 18px;
+}
+.meal-section h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.meal-add {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: #c6b5ff;
+  background: #292946;
+}
+.meal-empty {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed #343d55;
+  border-radius: 12px;
+  color: var(--muted);
+  background: transparent;
+  text-align: start;
+}
+.ratio-total {
+  color: var(--muted);
+}
+.ratio-total.over {
+  color: #ff687d;
+}
+@media (max-width: 600px) {
+  .calorie-compact {
+    padding: 14px;
+  }
+  .calorie-compact .calorie-content {
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .calorie-compact .ring {
+    width: 76px;
+  }
+  .calorie-compact .calorie-stats {
+    gap: 8px;
+  }
+  .calorie-compact .calorie-stats span {
+    font-size: 11px;
+  }
+  .calorie-compact .calorie-stats strong {
+    font-size: 16px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

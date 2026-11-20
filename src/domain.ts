@@ -33,6 +33,7 @@ export const entrySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   createdAt: z.number(),
   deleted: z.boolean().default(false),
+  meal: z.enum(["breakfast", "lunch", "dinner"]).default("lunch"),
 });
 export type Entry = z.infer<typeof entrySchema>;
 export type Unit =
