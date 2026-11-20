@@ -78,7 +78,8 @@ export default function Editor({
   try {
     q = quantityInBasis(amount, unit, p.basis, portion);
   } catch {}
-  const automaticCalories = p.source === "manual" || macrosEdited;
+  const automaticCalories =
+    p.source === "manual" || macrosEdited || p.nutrients.kcal === null;
   const nutrients = {
     ...p.nutrients,
     kcal: automaticCalories

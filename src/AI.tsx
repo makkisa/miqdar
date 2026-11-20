@@ -27,12 +27,14 @@ export async function compressImage(file: File) {
 }
 export default function AI({
   ar,
+  initialMode,
   entries,
   remaining,
   onProduct,
   onAction,
 }: {
   ar: boolean;
+  initialMode: "label" | "meal";
   entries: Entry[];
   remaining: Nutrients;
   onProduct: (p: Product, q?: number) => void;
@@ -42,7 +44,7 @@ export default function AI({
     q?: number,
   ) => Promise<void>;
 }) {
-  const [mode, setMode] = useState("chat");
+  const [mode] = useState(initialMode);
   const [prompt, setPrompt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
@@ -51,15 +53,38 @@ export default function AI({
   const [result, setResult] = useState<ReturnType<
     typeof aiSchema.parse
   > | null>(null);
+  const apiConfigured =
+    Boolean(import.meta.env.VITE_API_BASE) || import.meta.env.DEV;
   return (
     <section className="panel">
-      <span className="eyebrow">MIQDAR AI</span>
-      <h2>{ar ? "مساعدك الغذائي" : "Your food assistant"}</h2>
+      <span className="eyebrow">
+        {mode === "label" ? "LABEL READER" : "MEAL PHOTO"}
+      </span>
+      <h2>
+        {mode === "label"
+          ? ar
+            ? "تصوير جدول القيم الغذائية"
+            : "Nutrition label scan"
+          : ar
+            ? "تحليل صورة الوجبة"
+            : "Meal photo estimate"}
+      </h2>
       <p className="muted">
-        {ar
-          ? "اقتراحات تُراجعها أنت قبل أي تغيير."
-          : "Suggestions you review before any change."}
+        {mode === "label"
+          ? ar
+            ? "نستخرج القيم الظاهرة فقط. راجعها قبل حفظ المنتج."
+            : "Only visible values are extracted. Review them before saving."
+          : ar
+            ? "اكتب وصفًا بسيطًا للمكونات والكمية. النتيجة تقديرية وتحتاج مراجعتك."
+            : "Describe the ingredients and portion. The estimate needs your review."}
       </p>
+      {!apiConfigured && (
+        <p className="notice" role="status">
+          {ar
+            ? "تحليل الصور يحتاج ربط خادم Gemini الآمن. لا تُرسل الصورة قبل إعداد الخدمة."
+            : "Photo analysis needs a secure Gemini server. Images will not be sent until the service is configured."}
+        </p>
+      )}
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -108,33 +133,30 @@ export default function AI({
           }
         }}
       >
-        <label>
-          {ar ? "المهمة" : "Task"}
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="chat">{ar ? "شات" : "Chat"}</option>
-            <option value="label">
-              {ar ? "جدول القيم الغذائية" : "Nutrition label"}
-            </option>
-            <option value="meal">
-              {ar ? "تقدير صورة وجبة" : "Estimate meal photo"}
-            </option>
-          </select>
-        </label>
-        <label>
-          {ar ? "رسالتك" : "Your message"}
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            maxLength={2000}
-            placeholder={
-              ar
-                ? "كم باقي لي بروتين اليوم؟"
-                : "How much protein remains today?"
-            }
-          />
-        </label>
+        {mode === "meal" && (
+          <label>
+            {ar ? "وصف الوجبة" : "Meal description"}
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              maxLength={1000}
+              placeholder={
+                ar
+                  ? "مثال: رز أبيض، صدر دجاج مشوي، وسلطة بدون صوص"
+                  : "Example: white rice, grilled chicken breast and salad, no dressing"
+              }
+              required
+            />
+          </label>
+        )}
         <label className="file-button">
-          {ar ? "إرفاق صورة" : "Attach image"}
+          {mode === "label"
+            ? ar
+              ? "التقط صورة الملصق الغذائي"
+              : "Photograph the nutrition label"
+            : ar
+              ? "التقط صورة الوجبة"
+              : "Photograph the meal"}
           <input
             type="file"
             accept="image/*"
@@ -157,12 +179,18 @@ export default function AI({
             onChange={(e) => setConsent(e.target.checked)}
           />
           {ar
-            ? "أوافق على إرسال هذه الرسالة والصورة إلى Gemini. قد تستخدم الخطة المجانية المحتوى لتحسين خدمات Google."
-            : "I agree to send this message and image to Gemini. The free tier may use content to improve Google services."}
+            ? "أوافق على إرسال الصورة والوصف إلى Gemini لتحليلها. قد تستخدم الخطة المجانية المحتوى لتحسين خدمات Google."
+            : "I agree to send the image and description to Gemini. The free tier may use content to improve Google services."}
         </label>
         <button
           className="primary"
-          disabled={busy || !consent || (!prompt && !file)}
+          disabled={
+            busy ||
+            !apiConfigured ||
+            !consent ||
+            !file ||
+            (mode === "meal" && !prompt.trim())
+          }
         >
           {busy
             ? ar
@@ -179,7 +207,60 @@ export default function AI({
           <p>{result.message}</p>
           {result.label && (
             <>
-              <pre>{JSON.stringify(result.label, null, 2)}</pre>
+              <div className="label-values">
+                <strong>{result.label.name}</strong>
+                <span className="muted">
+                  {ar ? "أساس القيم: " : "Values based on: "}
+                  {result.label.basis === "serving"
+                    ? `${result.label.servingSize ?? "—"} ${result.label.servingUnit ?? ""}`
+                    : result.label.basis}
+                </span>
+                <div>
+                  {(
+                    [
+                      [
+                        "السعرات",
+                        "Calories",
+                        result.label.nutrients.kcal,
+                        result.label.energyUnit,
+                      ],
+                      [
+                        "البروتين",
+                        "Protein",
+                        result.label.nutrients.protein,
+                        "g",
+                      ],
+                      [
+                        "الكربوهيدرات",
+                        "Carbohydrate",
+                        result.label.nutrients.carbs,
+                        "g",
+                      ],
+                      ["الدهون", "Fat", result.label.nutrients.fat, "g"],
+                    ] as const
+                  ).map(([arName, enName, value, unit]) => (
+                    <span key={enName}>
+                      {ar ? arName : enName}
+                      <b>
+                        {value === null
+                          ? ar
+                            ? "راجع"
+                            : "Review"
+                          : `${value} ${unit}`}
+                      </b>
+                    </span>
+                  ))}
+                </div>
+                {result.label.nutrients.protein === null ||
+                result.label.nutrients.carbs === null ||
+                result.label.nutrients.fat === null ? (
+                  <p className="notice">
+                    {ar
+                      ? "بعض القيم غير واضحة. ستحتاج إلى إدخالها أو مراجعتها قبل الحفظ."
+                      : "Some values are unclear. Review or enter them before saving."}
+                  </p>
+                ) : null}
+              </div>
               {result.label.basis === "serving" && (
                 <div className="grid2">
                   <label>

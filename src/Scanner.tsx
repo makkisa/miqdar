@@ -27,8 +27,28 @@ export default function Scanner({ onCode, ar }: Props) {
       try {
         performance.mark("camera-start");
         const Native = (window as any).BarcodeDetector;
-        const formats = ["ean_13", "ean_8", "upc_a", "upc_e", "qr_code"];
-        if (Native && (await Native.getSupportedFormats()).includes("ean_13")) {
+        const formats = [
+          "ean_13",
+          "ean_8",
+          "upc_a",
+          "upc_e",
+          "code_128",
+          "code_39",
+          "code_93",
+          "codabar",
+          "itf",
+          "qr_code",
+          "data_matrix",
+          "pdf417",
+          "aztec",
+        ];
+        const supported: string[] = Native
+          ? await Native.getSupportedFormats()
+          : [];
+        const nativeFormats = formats.filter((format) =>
+          supported.includes(format),
+        );
+        if (Native && nativeFormats.length) {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: { ideal: "environment" },
@@ -44,9 +64,7 @@ export default function Scanner({ onCode, ar }: Props) {
           video.current!.srcObject = stream;
           await video.current!.play();
           performance.measure("camera-open", "camera-start");
-          const detector = new Native({
-            formats: formats.filter((f) => f !== "qr_code"),
-          });
+          const detector = new Native({ formats: nativeFormats });
           const canvas = document.createElement("canvas");
           canvas.width = 640;
           canvas.height = 360;

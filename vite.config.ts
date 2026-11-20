@@ -12,17 +12,23 @@ export default defineConfig({
       registerType: "prompt",
       includeAssets: ["apple-touch-icon.png"],
       manifest: {
-        name: "مِقدر",
-        short_name: "مِقدر",
+        name: "مِقدار",
+        short_name: "مِقدار",
         lang: "ar",
         dir: "rtl",
         description: "السعرات والماكروز، ببساطة",
-        theme_color: "#0b1515",
-        background_color: "#0b1515",
+        theme_color: "#091722",
+        background_color: "#091722",
         display: "standalone",
         start_url: base,
         scope: base,
         icons: [
+          {
+            src: `${base}brand.svg`,
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any",
+          },
           { src: `${base}icon-192.png`, sizes: "192x192", type: "image/png" },
           {
             src: `${base}icon-512.png`,

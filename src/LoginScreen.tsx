@@ -54,13 +54,13 @@ export default function LoginScreen({
       <section className="login-card" aria-labelledby="login-title">
         <img
           className="login-mark"
-          src={`${import.meta.env.BASE_URL}icon-192.png`}
+          src={`${import.meta.env.BASE_URL}brand.svg`}
           width="80"
           height="80"
           alt=""
         />
         <p className="login-wordmark">
-          مِقدر <span>MIQDAR</span>
+          مِقدار <span>MIQDAR</span>
         </p>
         <h1 id="login-title">
           {t("خطوتك الأولى نحو التوازن.", "Your first step toward balance.")}

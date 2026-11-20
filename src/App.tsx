@@ -3,10 +3,11 @@ import {
   Activity,
   ScanLine,
   Camera,
+  ClipboardList,
+  Utensils,
   Plus,
   Home,
   BookOpen,
-  Sparkles,
   Settings,
   Star,
   Trash2,
@@ -62,6 +63,8 @@ export default function App() {
   } | null>(null);
   const [query, setQuery] = useState("");
   const [similar, setSimilar] = useState<Product[]>([]);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
+  const [aiMode, setAiMode] = useState<"label" | "meal">("meal");
   const [searched, setSearched] = useState(false);
   const [ratios, setRatios] = useState({ protein: 25, carbs: 45, fat: 30 });
   const [busy, setBusy] = useState(false);
@@ -196,26 +199,101 @@ export default function App() {
   }
   async function scan(code: string) {
     setPage("library");
+    if (!/^\d{8,14}$/.test(code)) {
+      setError(
+        t(
+          "تمت قراءة الرمز، لكن قاعدة المنتجات تدعم باركودات الطعام الرقمية فقط. جرّب EAN أو UPC أو ابحث باسم المنتج.",
+          "Code read, but the food database supports numeric product barcodes only. Try EAN/UPC or search by product name.",
+        ),
+      );
+      return;
+    }
     setBusy(true);
     setError("");
+    setBarcodeProduct(null);
+    setSimilar([]);
+    setSearched(false);
     controller.current?.abort();
     controller.current = new AbortController();
     try {
       const cached = data.products.find((p) => p.barcode === code);
       const p = cached ?? (await lookup(code, controller.current.signal));
-      if (p) setEditor({ p });
-      else
+      const complete = (candidate: Product) =>
+        [
+          candidate.nutrients.protein,
+          candidate.nutrients.carbs,
+          candidate.nutrients.fat,
+        ].every((n) => n !== null);
+      if (p && complete(p)) {
+        setEditor({ p });
+        return;
+      }
+      if (p) setBarcodeProduct(p);
+      setQuery(p?.name && p.name !== code ? p.name : "");
+      const matches = await searchOFF(
+        p?.name && p.name !== code ? p.name : code,
+        controller.current.signal,
+      );
+      const exact = matches.find(
+        (candidate) => candidate.barcode === code && complete(candidate),
+      );
+      if (exact) {
+        setEditor({ p: exact });
+        return;
+      }
+      setSimilar(
+        matches
+          .filter(
+            (candidate) => candidate.barcode !== code && complete(candidate),
+          )
+          .slice(0, 6),
+      );
+      setSearched(true);
+      setError("");
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        setSearched(true);
         setError(
           t(
-            "لم نجد منتجًا مطابقًا. ابحث بالاسم أدناه أو صوّر الملصق.",
-            "No exact match. Search by name below or photograph the label.",
+            "تعذر البحث الآن. أدخل اسم المنتج للبحث عن بياناته أو منتج قريب.",
+            "Search is unavailable. Enter the product name to find its data or a similar item.",
           ),
         );
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") fail();
+      }
     } finally {
       setBusy(false);
     }
+  }
+  function updateMacroRatio(key: "protein" | "carbs" | "fat", amount: number) {
+    const next = {
+      ...ratios,
+      [key]: Math.max(0, Math.min(100, ratios[key] + amount)),
+    };
+    setRatios(next);
+    localStorage.setItem(
+      `macro-ratios-${uid ?? "guest"}`,
+      JSON.stringify(next),
+    );
+    const g = {
+      ...goals,
+      protein: Math.round((goals.kcal * next.protein) / 400),
+      carbs: Math.round((goals.kcal * next.carbs) / 400),
+      fat: Math.round((goals.kcal * next.fat) / 900),
+    };
+    setGoals(g);
+    localStorage.setItem(`goals-${uid ?? "guest"}`, JSON.stringify(g));
+  }
+  function updateCalorieGoal(amount: number) {
+    const kcal = Math.max(500, Math.min(10000, goals.kcal + amount));
+    const g = {
+      ...goals,
+      kcal,
+      protein: Math.round((kcal * ratios.protein) / 400),
+      carbs: Math.round((kcal * ratios.carbs) / 400),
+      fat: Math.round((kcal * ratios.fat) / 900),
+    };
+    setGoals(g);
+    localStorage.setItem(`goals-${uid ?? "guest"}`, JSON.stringify(g));
   }
   const recent = [...data.products].sort((a, b) => {
     const last = (p: Product) =>
@@ -277,7 +355,6 @@ export default function App() {
         {[
           ["home", Home, t("نظرة اليوم", "Today")],
           ["library", BookOpen, t("مكتبتي", "My foods")],
-          ["ai", Sparkles, t("المساعد الذكي", "AI assistant")],
           ["settings", Settings, t("الإعدادات", "Settings")],
         ].map(([id, Icon, label]) => {
           const I = Icon as typeof Home;
@@ -344,7 +421,7 @@ export default function App() {
             </button>
           </div>
         </header>
-        <main>
+        <main key={page}>
           {error && (
             <div className="notice" role="alert">
               {error}
@@ -476,23 +553,49 @@ export default function App() {
                   </div>
                   <div className="quick-actions">
                     <button
-                      className="scan-action"
+                      className="scan-action action-tile scan-tile"
                       onClick={() => setPage("scan")}
                     >
                       <ScanLine />
                       <span>
                         <strong>{t("مسح باركود", "Scan barcode")}</strong>
                         <small>
-                          {t("امسح، حدّد، سجّل", "Scan. Portion. Log.")}
+                          {t("بحث مباشر عن المنتج", "Find product by code")}
                         </small>
                       </span>
                     </button>
-                    <button onClick={() => setPage("ai")}>
+                    <button
+                      className="action-tile label-tile"
+                      onClick={() => {
+                        setAiMode("label");
+                        setPage("ai");
+                      }}
+                    >
+                      <ClipboardList />
+                      <span>
+                        <strong>
+                          {t("صوّر الملصق الغذائي", "Scan nutrition label")}
+                        </strong>
+                        <small>
+                          {t(
+                            "استخراج القيم ومراجعتها",
+                            "Extract and review values",
+                          )}
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      className="action-tile meal-photo-tile"
+                      onClick={() => {
+                        setAiMode("meal");
+                        setPage("ai");
+                      }}
+                    >
                       <Camera />
                       <span>
-                        <strong>{t("صوّر طعامك", "Snap your food")}</strong>
+                        <strong>{t("صوّر طعامك", "Photo your meal")}</strong>
                         <small>
-                          {t("تحليل ومراجعة ذكية", "Analyze & review")}
+                          {t("أضف وصف الوجبة", "Add a meal description")}
                         </small>
                       </span>
                     </button>
@@ -587,6 +690,7 @@ export default function App() {
                         setQuery(e.target.value);
                         controller.current?.abort();
                         setSimilar([]);
+                        setBarcodeProduct(null);
                       }}
                       placeholder={t(
                         "ابحث عن طعام محفوظ أو منتج…",
@@ -594,6 +698,62 @@ export default function App() {
                       )}
                     />
                   </label>
+                  {barcodeProduct && (
+                    <div className="barcode-gap-card">
+                      <span className="eyebrow">
+                        {t("بيانات المنتج", "PRODUCT DATA")}
+                      </span>
+                      <h2>{barcodeProduct.name}</h2>
+                      <p>
+                        {t(
+                          "وجدنا الباركود، لكن بيانات الماكروز ناقصة في قاعدة Open Food Facts.",
+                          "The barcode matched, but this Open Food Facts record is missing macro data.",
+                        )}
+                      </p>
+                      <small className="muted">
+                        {t(
+                          "المصدر: Open Food Facts · الناقص: ",
+                          "Source: Open Food Facts · Missing: ",
+                        )}
+                        {(["protein", "carbs", "fat"] as const)
+                          .filter(
+                            (key) => barcodeProduct.nutrients[key] === null,
+                          )
+                          .map(
+                            (key) =>
+                              ({
+                                protein: t("البروتين", "protein"),
+                                carbs: t("الكربوهيدرات", "carbs"),
+                                fat: t("الدهون", "fat"),
+                              })[key],
+                          )
+                          .join("، ") || t("السعرات", "calories")}
+                      </small>
+                      {similar.length === 0 && searched ? (
+                        <div className="barcode-fallback">
+                          <p>
+                            {t(
+                              "لم نجد سجلًا كاملًا أو منتجًا قريبًا ببيانات موثوقة. صوّر جدول القيم الغذائية لإدخاله بدقة.",
+                              "No complete record or reliable similar product was found. Photograph the nutrition label to enter it accurately.",
+                            )}
+                          </p>
+                          <button
+                            className="primary"
+                            onClick={() => {
+                              setAiMode("label");
+                              setPage("ai");
+                            }}
+                          >
+                            <Camera size={18} />{" "}
+                            {t(
+                              "تصوير جدول القيم",
+                              "Photograph nutrition label",
+                            )}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                   <div className="row">
                     <button onClick={() => setEditor({})}>
                       <Plus size={18} />
@@ -621,14 +781,17 @@ export default function App() {
                     </button>
                   </div>
                   {busy && <p role="status">{t("جارٍ البحث…", "Searching…")}</p>}
-                  {searched && !busy && similar.length === 0 && (
-                    <p className="notice" role="status">
-                      {t(
-                        "تعذر العثور على المنتج. جرّب اسمًا آخر أو باركودًا، أو أضفه يدويًا.",
-                        "Product not found. Try another name or barcode, or add it manually.",
-                      )}
-                    </p>
-                  )}
+                  {searched &&
+                    !busy &&
+                    similar.length === 0 &&
+                    !barcodeProduct && (
+                      <p className="notice" role="status">
+                        {t(
+                          "تعذر العثور على بيانات غذائية كاملة. جرّب اسم المنتج؛ وإن لم تتوفر بيانات موثوقة صوّر الملصق.",
+                          "No complete nutrition record found. Search by product name; if reliable data is unavailable, photograph the label.",
+                        )}
+                      </p>
+                    )}
                   {recent
                     .filter((p) =>
                       p.name.toLowerCase().includes(query.toLowerCase()),
@@ -654,6 +817,24 @@ export default function App() {
                       ))}
                     </>
                   )}
+                  {searched &&
+                    !busy &&
+                    similar.length === 0 &&
+                    !barcodeProduct && (
+                      <button
+                        className="label-fallback-button"
+                        onClick={() => {
+                          setAiMode("label");
+                          setPage("ai");
+                        }}
+                      >
+                        <Camera size={18} />{" "}
+                        {t(
+                          "تصوير الملصق الغذائي",
+                          "Photograph nutrition label",
+                        )}
+                      </button>
+                    )}
                 </section>
               )}
               {page === "scan" && (
@@ -666,7 +847,9 @@ export default function App() {
               {page === "ai" && (
                 <Suspense fallback={<p>…</p>}>
                   <AI
+                    key={aiMode}
                     ar={ar}
+                    initialMode={aiMode}
                     entries={entries}
                     remaining={remaining}
                     onProduct={(p, q) => setEditor({ p, q })}
@@ -781,34 +964,39 @@ export default function App() {
                     )}
                   </p>
                   <div className="grid2">
-                    {(["kcal"] as (keyof Goals)[]).map((k) => (
-                      <label key={k}>
-                        {t("السعرات اليومية", k)}
-                        <input
-                          type="number"
-                          min="1"
-                          max="10000"
-                          value={goals[k]}
-                          onChange={(e) => {
-                            const n = Number(e.target.value);
-                            if (n > 0 && n <= 10000) {
-                              const g = {
-                                ...goals,
-                                kcal: n,
-                                protein: Math.round((n * ratios.protein) / 400),
-                                carbs: Math.round((n * ratios.carbs) / 400),
-                                fat: Math.round((n * ratios.fat) / 900),
-                              };
-                              setGoals(g);
-                              localStorage.setItem(
-                                `goals-${uid ?? "guest"}`,
-                                JSON.stringify(g),
-                              );
-                            }
-                          }}
-                        />
-                      </label>
-                    ))}
+                    <div className="goal-stepper-card">
+                      <span>
+                        {t("هدف السعرات اليومي", "Daily calorie goal")}
+                      </span>
+                      <div className="stepper-wheel calorie-wheel">
+                        <button
+                          type="button"
+                          aria-label={t("زيادة 50 سعرة", "Add 50 calories")}
+                          onClick={() => updateCalorieGoal(50)}
+                          disabled={goals.kcal >= 10000}
+                        >
+                          +
+                        </button>
+                        <output aria-live="polite">
+                          {goals.kcal.toLocaleString(ar ? "ar" : "en")}{" "}
+                          <small>kcal</small>
+                        </output>
+                        <button
+                          type="button"
+                          aria-label={t("إنقاص 50 سعرة", "Remove 50 calories")}
+                          onClick={() => updateCalorieGoal(-50)}
+                          disabled={goals.kcal <= 500}
+                        >
+                          −
+                        </button>
+                      </div>
+                      <small className="muted">
+                        {t(
+                          "كل ضغطة تغيّر الهدف 50 سعرة",
+                          "Each step changes the goal by 50 kcal",
+                        )}
+                      </small>
+                    </div>
                   </div>
                   <div className="macro-goals">
                     {(["protein", "carbs", "fat"] as const).map((key) => {
@@ -819,49 +1007,36 @@ export default function App() {
                         fat: t("الدهون", "Fat"),
                       }[key];
                       return (
-                        <label className="macro-slider" key={key}>
-                          {name}
-                          <b>
-                            {ratios[key]}٪ ·{" "}
-                            {Math.round(
-                              (goals.kcal * ratios[key]) / 100 / factor,
-                            )}{" "}
-                            g
-                          </b>
-                          <input
-                            aria-label={name}
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={ratios[key]}
-                            onChange={(e) => {
-                              const next = {
-                                ...ratios,
-                                [key]: Number(e.target.value),
-                              };
-                              setRatios(next);
-                              localStorage.setItem(
-                                `macro-ratios-${uid ?? "guest"}`,
-                                JSON.stringify(next),
-                              );
-                              const g = {
-                                ...goals,
-                                protein: Math.round(
-                                  (goals.kcal * next.protein) / 400,
-                                ),
-                                carbs: Math.round(
-                                  (goals.kcal * next.carbs) / 400,
-                                ),
-                                fat: Math.round((goals.kcal * next.fat) / 900),
-                              };
-                              setGoals(g);
-                              localStorage.setItem(
-                                `goals-${uid}`,
-                                JSON.stringify(g),
-                              );
-                            }}
-                          />
-                        </label>
+                        <div className="macro-stepper" key={key}>
+                          <div className="macro-stepper-info">
+                            <strong>{name}</strong>
+                            <span>
+                              {Math.round(
+                                (goals.kcal * ratios[key]) / 100 / factor,
+                              )}{" "}
+                              g
+                            </span>
+                          </div>
+                          <div className="stepper-wheel macro-wheel">
+                            <button
+                              type="button"
+                              aria-label={`${t("زيادة نسبة", "Increase")} ${name} 1٪`}
+                              onClick={() => updateMacroRatio(key, 1)}
+                              disabled={ratios[key] >= 100}
+                            >
+                              +
+                            </button>
+                            <output aria-live="polite">{ratios[key]}٪</output>
+                            <button
+                              type="button"
+                              aria-label={`${t("إنقاص نسبة", "Decrease")} ${name} 1٪`}
+                              onClick={() => updateMacroRatio(key, -1)}
+                              disabled={ratios[key] <= 0}
+                            >
+                              −
+                            </button>
+                          </div>
+                        </div>
                       );
                     })}
                     <p
@@ -870,10 +1045,14 @@ export default function App() {
                     >
                       {t("مجموع النسب", "Total ratio")}{" "}
                       {ratios.protein + ratios.carbs + ratios.fat}٪ ·{" "}
-                      {t(
-                        "السعرات محسوبة من الماكروز",
-                        "Calories calculated from macros",
-                      )}
+                      {ratios.protein + ratios.carbs + ratios.fat > 100
+                        ? t("تجاوزت 100٪", "Over 100%")
+                        : ratios.protein + ratios.carbs + ratios.fat < 100
+                          ? t(
+                              "أكمل التوزيع حتى 100٪",
+                              "Complete the split to 100%",
+                            )
+                          : t("اكتمل التوزيع", "Balanced")}
                     </p>
                   </div>
                   <h2>{t("التثبيت على iPhone", "Install on iPhone")}</h2>
@@ -934,7 +1113,7 @@ export default function App() {
           )}
         </main>
         <footer>
-          مِقدر <span>·</span>{" "}
+          مِقدار <span>·</span>{" "}
           {t("خطوة أقرب، كل يوم.", "A little closer, every day.")}
         </footer>
       </div>
@@ -943,7 +1122,6 @@ export default function App() {
           ["home", Home, t("اليوم", "Today")],
           ["library", BookOpen, t("مكتبتي", "Foods")],
           ["scan", ScanLine, t("مسح", "Scan")],
-          ["ai", Sparkles, t("مساعد", "AI")],
           ["settings", Settings, t("الإعدادات", "Settings")],
         ].map(([id, Icon, label]) => {
           const I = Icon as typeof Home;
@@ -993,11 +1171,13 @@ export default function App() {
 function Brand() {
   return (
     <div className="brand">
-      <span className="brand-symbol" aria-hidden="true">
-        مِ
-      </span>
+      <img
+        className="brand-symbol"
+        src={`${import.meta.env.BASE_URL}brand.svg`}
+        alt=""
+      />
       <span className="brand-word">
-        مِقدر<small>MIQDAR</small>
+        مِقدار<small>MIQDAR</small>
       </span>
     </div>
   );

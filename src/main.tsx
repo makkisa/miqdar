@@ -10,7 +10,7 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   render() {
     return this.state.failed ? (
       <main>
-        <h1>مِقدر</h1>
+        <h1>مِقدار</h1>
         <p>تعذر فتح الشاشة. أعد تحميل التطبيق. / Please reload the app.</p>
         <button onClick={() => location.reload()}>
           إعادة المحاولة / Retry
