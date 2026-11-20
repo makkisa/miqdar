@@ -63,6 +63,8 @@ export default function App() {
   } | null>(null);
   const [query, setQuery] = useState("");
   const [similar, setSimilar] = useState<Product[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [ratios, setRatios] = useState({ protein: 25, carbs: 45, fat: 30 });
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState<Entry | null>(null);
   const [goals, setGoals] = useState<Goals>({
@@ -633,6 +635,7 @@ export default function App() {
                         controller.current = new AbortController();
                         setBusy(true);
                         try {
+                          setSearched(true);
                           setSimilar(
                             await searchOFF(query, controller.current.signal),
                           );
@@ -647,6 +650,14 @@ export default function App() {
                     </button>
                   </div>
                   {busy && <p role="status">{t("جارٍ البحث…", "Searching…")}</p>}
+                  {searched && !busy && similar.length === 0 && (
+                    <p className="notice" role="status">
+                      {t(
+                        "تعذر العثور على المنتج. جرّب اسمًا آخر أو باركودًا، أو أضفه يدويًا.",
+                        "Product not found. Try another name or barcode, or add it manually.",
+                      )}
+                    </p>
+                  )}
                   {recent
                     .filter((p) =>
                       p.name.toLowerCase().includes(query.toLowerCase()),
@@ -789,20 +800,19 @@ export default function App() {
                       "Sign-out requires pending changes to sync. Guest data is separate and is not imported automatically.",
                     )}
                   </p>
-                  <h2>{t("الأهداف اليومية", "Daily targets")}</h2>
+                  <h2>
+                    {t("أهداف السعرات والماكروز", "Calorie & macro goals")}
+                  </h2>
                   <p className="muted">
                     {t(
-                      "قيم بداية قابلة للتعديل، وليست توصية غذائية شخصية.",
-                      "Editable starting values, not personal dietary advice.",
+                      "حدّد السعرات ثم وزّعها على الماكروز. الغرامات تتحدث مباشرة ومجموع النسب 100٪.",
+                      "Set calories, then split them across macros. Grams update instantly; ratios total 100%.",
                     )}
                   </p>
                   <div className="grid2">
-                    {(Object.keys(goals) as (keyof Goals)[]).map((k, i) => (
+                    {(["kcal"] as (keyof Goals)[]).map((k) => (
                       <label key={k}>
-                        {t(
-                          ["السعرات", "البروتين", "الكربوهيدرات", "الدهون"][i],
-                          k,
-                        )}
+                        {t("السعرات اليومية", k)}
                         <input
                           type="number"
                           min="1"
@@ -811,7 +821,13 @@ export default function App() {
                           onChange={(e) => {
                             const n = Number(e.target.value);
                             if (n > 0 && n <= 10000) {
-                              const g = { ...goals, [k]: n };
+                              const g = {
+                                ...goals,
+                                kcal: n,
+                                protein: Math.round((n * ratios.protein) / 400),
+                                carbs: Math.round((n * ratios.carbs) / 400),
+                                fat: Math.round((n * ratios.fat) / 900),
+                              };
                               setGoals(g);
                               localStorage.setItem(
                                 `goals-${uid ?? "guest"}`,
@@ -822,6 +838,78 @@ export default function App() {
                         />
                       </label>
                     ))}
+                  </div>
+                  <div className="macro-goals">
+                    {(["protein", "carbs", "fat"] as const).map((key) => {
+                      const factor = key === "fat" ? 9 : 4;
+                      const name = {
+                        protein: t("البروتين", "Protein"),
+                        carbs: t("الكربوهيدرات", "Carbs"),
+                        fat: t("الدهون", "Fat"),
+                      }[key];
+                      return (
+                        <label className="macro-slider" key={key}>
+                          {name}
+                          <b>
+                            {ratios[key]}٪ ·{" "}
+                            {Math.round(
+                              (goals.kcal * ratios[key]) / 100 / factor,
+                            )}{" "}
+                            g
+                          </b>
+                          <input
+                            aria-label={name}
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={ratios[key]}
+                            onChange={(e) => {
+                              const value = Number(e.target.value),
+                                other = (
+                                  ["protein", "carbs", "fat"] as const
+                                ).filter((k) => k !== key),
+                                sum = ratios[other[0]] + ratios[other[1]],
+                                rest = 100 - value;
+                              const next = {
+                                ...ratios,
+                                [key]: value,
+                                [other[0]]: sum
+                                  ? Math.round((rest * ratios[other[0]]) / sum)
+                                  : Math.round(rest / 2),
+                                [other[1]]: 0,
+                              };
+                              next[other[1]] = 100 - next[key] - next[other[0]];
+                              setRatios(next);
+                              localStorage.setItem(
+                                `macro-ratios-${uid}`,
+                                JSON.stringify(next),
+                              );
+                              const g = {
+                                ...goals,
+                                protein: Math.round(
+                                  (goals.kcal * next.protein) / 400,
+                                ),
+                                carbs: Math.round(
+                                  (goals.kcal * next.carbs) / 400,
+                                ),
+                                fat: Math.round((goals.kcal * next.fat) / 900),
+                              };
+                              setGoals(g);
+                              localStorage.setItem(
+                                `goals-${uid}`,
+                                JSON.stringify(g),
+                              );
+                            }}
+                          />
+                        </label>
+                      );
+                    })}
+                    <p className="muted">
+                      {t(
+                        "مجموع النسب 100٪ · السعرات محسوبة من الماكروز",
+                        "Ratios total 100% · calories calculated from macros",
+                      )}
+                    </p>
                   </div>
                   <h2>{t("نسختك الاحتياطية", "Your backup")}</h2>
                   <div className="row">
