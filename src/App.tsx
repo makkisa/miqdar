@@ -34,6 +34,7 @@ import {
   type Nutrients,
 } from "./domain";
 import { lookup, searchOFF } from "./products";
+import PercentWheel from "./PercentWheel";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import LoginScreen from "./LoginScreen";
 const Editor = lazy(() => import("./Editor"));
@@ -264,10 +265,10 @@ export default function App() {
       setBusy(false);
     }
   }
-  function updateMacroRatio(key: "protein" | "carbs" | "fat", amount: number) {
+  function updateMacroRatio(key: "protein" | "carbs" | "fat", value: number) {
     const next = {
       ...ratios,
-      [key]: Math.max(0, Math.min(100, ratios[key] + amount)),
+      [key]: Math.max(0, Math.min(100, Math.round(value))),
     };
     setRatios(next);
     localStorage.setItem(
@@ -1017,25 +1018,11 @@ export default function App() {
                               g
                             </span>
                           </div>
-                          <div className="stepper-wheel macro-wheel">
-                            <button
-                              type="button"
-                              aria-label={`${t("زيادة نسبة", "Increase")} ${name} 1٪`}
-                              onClick={() => updateMacroRatio(key, 1)}
-                              disabled={ratios[key] >= 100}
-                            >
-                              +
-                            </button>
-                            <output aria-live="polite">{ratios[key]}٪</output>
-                            <button
-                              type="button"
-                              aria-label={`${t("إنقاص نسبة", "Decrease")} ${name} 1٪`}
-                              onClick={() => updateMacroRatio(key, -1)}
-                              disabled={ratios[key] <= 0}
-                            >
-                              −
-                            </button>
-                          </div>
+                          <PercentWheel
+                            label={name}
+                            value={ratios[key]}
+                            onChange={(value) => updateMacroRatio(key, value)}
+                          />
                         </div>
                       );
                     })}
