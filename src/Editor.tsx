@@ -34,7 +34,7 @@ export default function Editor({
       id: crypto.randomUUID(),
       name: "",
       basis: "g",
-      nutrients: { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+      nutrients: { kcal: null, protein: null, carbs: null, fat: null },
       source: "manual",
       favorite: false,
       lastQuantity: 100,
@@ -47,9 +47,12 @@ export default function Editor({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [macrosEdited, setMacrosEdited] = useState(false);
-  const [showMacroEditor, setShowMacroEditor] = useState(
-    () => !product || [product.nutrients.protein, product.nutrients.carbs, product.nutrients.fat].some((value) => value === null),
-  );
+  const [showMacroEditor, setShowMacroEditor] = useState(false);
+  const missingMacros = [
+    p.nutrients.protein,
+    p.nutrients.carbs,
+    p.nutrients.fat,
+  ].some((value) => value === null);
   const [operationId] = useState(() => crypto.randomUUID());
   const modal = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -123,8 +126,10 @@ export default function Editor({
             setBusy(true);
             try {
               if (!q) throw Error("quantity");
-              if (Object.values(nutrients).some((n) => n === null))
+              if (Object.values(nutrients).some((n) => n === null)) {
+                setShowMacroEditor(true);
                 throw Error("missing");
+              }
               await onSave(
                 productSchema.parse({
                   ...p,
@@ -149,8 +154,8 @@ export default function Editor({
             } catch {
               setError(
                 ar
-                  ? "أكمل القيم والكمية. الوحدات المنزلية تحتاج وزنًا أو حجمًا محددًا."
-                  : "Complete all values and quantity. Household units need a specific weight or volume.",
+                  ? "أدخل الماكروز الناقصة وحدد وزن أو حجم الحصة المنزلية."
+                  : "Enter missing macros and define the household portion weight or volume.",
               );
               setBusy(false);
             }
@@ -214,7 +219,9 @@ export default function Editor({
           >
             {showMacroEditor
               ? ar ? "إخفاء تعديل الماكروز" : "Hide macro editor"
-              : ar ? "تعديل الماكروز" : "Edit macros"}
+              : missingMacros
+                ? ar ? "إدخال الماكروز" : "Enter macros"
+                : ar ? "تعديل الماكروز" : "Edit macros"}
           </button>
           {showMacroEditor && (
             <div className="grid2 macro-editor-fields">

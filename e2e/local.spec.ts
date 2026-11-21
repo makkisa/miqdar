@@ -9,6 +9,7 @@ test("manual log survives reload, can edit, delete and undo", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "تسجيل يدوي" }).click();
   await page.getByLabel("اسم الطعام").fill("وجبة اختبار");
+  await page.getByRole("button", { name: "إدخال الماكروز" }).click();
   await page.getByLabel("البروتين", { exact: true }).fill("10");
   await page.getByLabel("الكربوهيدرات", { exact: true }).fill("20");
   await page.getByLabel("الدهون", { exact: true }).fill("5");
