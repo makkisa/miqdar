@@ -820,14 +820,14 @@ export default function App() {
                       <h2>{barcodeProduct.name}</h2>
                       <p>
                         {t(
-                          "وجدنا الباركود، لكن بيانات الماكروز ناقصة في قاعدة Open Food Facts.",
-                          "The barcode matched, but this Open Food Facts record is missing macro data.",
+                          `وجدنا الباركود، لكن بيانات الماكروز ناقصة في ${barcodeProduct.source}.`,
+                          `The barcode matched, but this ${barcodeProduct.source} record is missing macro data.`,
                         )}
                       </p>
                       <small className="muted">
                         {t(
-                          "المصدر: Open Food Facts · الناقص: ",
-                          "Source: Open Food Facts · Missing: ",
+                          `المصدر: ${barcodeProduct.source} · الناقص: `,
+                          `Source: ${barcodeProduct.source} · Missing: `,
                         )}
                         {(["protein", "carbs", "fat"] as const)
                           .filter(
