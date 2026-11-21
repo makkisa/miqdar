@@ -23,7 +23,8 @@ test("manual calories react to macros and quantity and save the derived result",
   await page.getByLabel("الكربوهيدرات", { exact: true }).fill("2");
   await page.getByLabel("الدهون", { exact: true }).fill("1");
   await expect(page.getByLabel("السعرات المحسوبة")).toHaveText("21 kcal");
-  await page.getByLabel("الكمية", { exact: true }).fill("200");
+  const quantity = page.getByRole("spinbutton", { name: "الكمية" });
+  for (let index = 0; index < 100; index++) await quantity.press("ArrowUp");
   await expect(page.locator(".preview")).toContainText("السعرات 42");
   await page.getByRole("button", { name: "تأكيد وتسجيل" }).click();
   expect(await page.evaluate(() => (window as unknown as {saved: unknown}).saved)).toMatchObject({p: {nutrients: {kcal:21, protein:1, carbs:2, fat:1}}, q:200});

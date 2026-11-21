@@ -21,6 +21,7 @@ describe.skipIf(!enabled)("Firestore authorization", () => {
     const product = {
       id: "p",
       name: "Food",
+      brand: "Test brand",
       basis: "g",
       nutrients: { kcal: 100, protein: 1, carbs: 2, fat: 3 },
       source: "manual",
@@ -35,6 +36,20 @@ describe.skipIf(!enabled)("Firestore authorization", () => {
           "users/alice/products/p",
         ),
         product,
+      ),
+    );
+    await assertSucceeds(
+      setDoc(
+        doc(env.authenticatedContext("alice").firestore(), "users/alice/entries/e1"),
+        {
+          id: "e1",
+          product,
+          quantity: 100,
+          date: "2026-01-01",
+          createdAt: 1,
+          deleted: false,
+          meal: "lunch",
+        },
       ),
     );
     await assertFails(

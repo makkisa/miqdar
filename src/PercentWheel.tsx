@@ -19,14 +19,11 @@ export default function PercentWheel({
   suffix?: string;
   orientation?: "vertical" | "horizontal";
 }) {
-  const pointer = useRef({ x: 0, y: 0, remainder: 0 });
+  const pointer = useRef({ x: 0, y: 0, remainder: 0, value });
+  const normalizeValue = (next: number) =>
+    Math.max(min, Math.min(max, Math.round((next - min) / step) * step + min));
   const setValue = (next: number) =>
-    onChange(
-      Math.max(
-        min,
-        Math.min(max, Math.round((next - min) / step) * step + min),
-      ),
-    );
+    onChange(normalizeValue(next));
   const format = (number: number) => `${number.toLocaleString()}${suffix}`;
 
   return (
@@ -71,6 +68,7 @@ export default function PercentWheel({
           x: event.clientX,
           y: event.clientY,
           remainder: 0,
+          value,
         };
       }}
       onPointerMove={(event) => {
@@ -83,12 +81,17 @@ export default function PercentWheel({
         pointer.current.y = event.clientY;
         pointer.current.remainder += moved;
         let steps = 0;
-        while (Math.abs(pointer.current.remainder) >= 18) {
+        while (Math.abs(pointer.current.remainder) >= 10) {
           const step = pointer.current.remainder > 0 ? 1 : -1;
           steps += step;
-          pointer.current.remainder -= step * 18;
+          pointer.current.remainder -= step * 10;
         }
-        if (steps) setValue(value + steps * step);
+        if (steps) {
+          pointer.current.value = normalizeValue(
+            pointer.current.value + steps * step,
+          );
+          onChange(pointer.current.value);
+        }
       }}
       onPointerUp={(event) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId))

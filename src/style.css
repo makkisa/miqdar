@@ -6,6 +6,53 @@
   padding: 16px;
   margin: 16px 0;
 }
+.macro-energy-heading,
+.quantity-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.macro-energy-heading small {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: end;
+}
+.macro-edit-toggle {
+  min-height: 36px;
+  margin: -6px 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #ffffff08;
+  color: var(--muted);
+  font-size: 12px;
+}
+.macro-editor-fields {
+  margin: 4px 0 12px;
+  animation: card-arrive 150ms ease-out both;
+}
+.quantity-controls {
+  align-items: end;
+  margin-top: 12px;
+}
+.quantity-wheel-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.quantity-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.quantity-wheel-wrap .percent-wheel {
+  width: 100%;
+}
+.quantity-controls > label {
+  width: min(120px, 35%);
+  flex: 0 0 min(120px, 35%);
+}
 .goal-stepper-card,
 .macro-stepper,
 .barcode-gap-card,
@@ -1645,11 +1692,13 @@ pre {
     width: 100%;
   }
   header {
-    height: 75px;
+    height: calc(83px + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);
   }
   .mobile-brand {
     display: block;
+    transform: translateY(4px);
+    animation: brand-arrive 240ms ease-out both;
   }
   .desktop-label {
     display: none;
@@ -2384,13 +2433,25 @@ select:focus-visible {
     transform: translateY(0);
   }
 }
+@keyframes brand-arrive {
+  from {
+    opacity: 0.4;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(4px);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   main,
   .macro-stepper,
   .goal-stepper-card,
   .meal-section,
   .barcode-gap-card,
-  .login-card {
+  .login-card,
+  .mobile-brand,
+  .macro-editor-fields {
     animation: none !important;
   }
   button,

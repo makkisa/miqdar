@@ -17,7 +17,8 @@ test("manual log survives reload, can edit, delete and undo", async ({
   await page.reload();
   await expect(page.getByText("وجبة اختبار").first()).toBeVisible();
   await page.getByRole("button", { name: "تعديل", exact: true }).click();
-  await page.getByLabel("الكمية", { exact: true }).fill("150");
+  const quantity = page.getByRole("spinbutton", { name: "الكمية" });
+  for (let index = 0; index < 50; index++) await quantity.press("ArrowUp");
   await page.getByRole("button", { name: "تأكيد وتسجيل" }).click();
   await expect(page.getByText("150 g · 247.5 kcal")).toBeVisible();
   await page.getByRole("button", { name: "حذف", exact: true }).click();

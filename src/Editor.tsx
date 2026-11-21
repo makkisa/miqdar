@@ -7,6 +7,7 @@ import {
   type Product,
   type Unit,
 } from "./domain";
+import PercentWheel from "./PercentWheel";
 export default function Editor({
   product,
   quantity,
@@ -46,6 +47,9 @@ export default function Editor({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [macrosEdited, setMacrosEdited] = useState(false);
+  const [showMacroEditor, setShowMacroEditor] = useState(
+    () => !product || [product.nutrients.protein, product.nutrients.carbs, product.nutrients.fat].some((value) => value === null),
+  );
   const [operationId] = useState(() => crypto.randomUUID());
   const modal = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -54,7 +58,7 @@ export default function Editor({
       if (e.key === "Escape") onClose();
       if (e.key !== "Tab") return;
       const nodes = modal.current?.querySelectorAll<HTMLElement>(
-        "button:not(:disabled),input,select,textarea",
+        "button:not(:disabled),input,select,textarea,[role=spinbutton]",
       );
       if (!nodes?.length) return;
       const first = nodes[0],
@@ -175,60 +179,15 @@ export default function Editor({
               maxLength={200}
             />
           </label>
-          <div className="row">
-            <label>
-              {ar ? "القيم لكل" : "Values per"}
-              <select
-                value={p.basis}
-                onChange={(e) => {
-                  setP({ ...p, basis: e.target.value as "g" | "ml" });
-                  setUnit(e.target.value as Unit);
-                }}
-              >
-                <option value="g">100 g</option>
-                <option value="ml">100 ml</option>
-              </select>
-            </label>
-            <span className="muted">{p.source}</span>
-          </div>
-          <p className="muted">
-            {ar
-              ? "راجع القيم؛ المطابقة لا تضمن دقة البيانات."
-              : "Review values; a match does not guarantee accuracy."}
-          </p>
-          <div className="grid2">
-            {(["protein", "carbs", "fat"] as const).map((k) => (
-              <label key={k}>
-                {labels[k]}
-                <input
-                  type="number"
-                  min="0"
-                  max="10000"
-                  step="any"
-                  required
-                  value={p.nutrients[k] ?? ""}
-                  placeholder={ar ? "غير متوفر" : "Missing"}
-                  onChange={(e) => {
-                    setMacrosEdited(true);
-                    setP({
-                      ...p,
-                      nutrients: {
-                        ...p.nutrients,
-                        [k]:
-                          e.target.value === "" ? null : Number(e.target.value),
-                      },
-                    });
-                  }}
-                />
-              </label>
-            ))}
-          </div>
           <div className="macro-energy" aria-live="polite" aria-atomic="true">
-            <span>
-              {ar
-                ? "السعرات لكل 100 " + p.basis
-                : "Calories per 100 " + p.basis}
-            </span>
+            <div className="macro-energy-heading">
+              <span>
+                {ar
+                  ? "السعرات لكل 100 " + p.basis
+                  : "Calories per 100 " + p.basis}
+              </span>
+              {p.source !== "manual" && <small>{p.source}</small>}
+            </div>
             <output
               aria-label={ar ? "السعرات المحسوبة" : "Calculated calories"}
             >
@@ -247,25 +206,70 @@ export default function Editor({
                   : "Calories from the product source. Editing macros recalculates with 4/4/9; fiber and rounding can differ from the label."}
             </p>
           </div>
-          <div className="grid2">
-            <label>
-              {ar ? "الكمية" : "Quantity"}
-              <input
-                type="number"
-                min="0.01"
-                max="100000"
-                step="any"
+          <button
+            type="button"
+            className="macro-edit-toggle"
+            aria-expanded={showMacroEditor}
+            onClick={() => setShowMacroEditor((visible) => !visible)}
+          >
+            {showMacroEditor
+              ? ar ? "إخفاء تعديل الماكروز" : "Hide macro editor"
+              : ar ? "تعديل الماكروز" : "Edit macros"}
+          </button>
+          {showMacroEditor && (
+            <div className="grid2 macro-editor-fields">
+              {(["protein", "carbs", "fat"] as const).map((k) => (
+                <label key={k}>
+                  {labels[k]}
+                  <input
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="any"
+                    required
+                    value={p.nutrients[k] ?? ""}
+                    placeholder={ar ? "غير متوفر" : "Missing"}
+                    onChange={(e) => {
+                      setMacrosEdited(true);
+                      setP({
+                        ...p,
+                        nutrients: {
+                          ...p.nutrients,
+                          [k]: e.target.value === "" ? null : Number(e.target.value),
+                        },
+                      });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="quantity-controls">
+            <div className="quantity-wheel-wrap">
+              <span className="quantity-label">{ar ? "الكمية" : "Quantity"}</span>
+              <PercentWheel
+                label={ar ? "الكمية" : "Quantity"}
                 value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                min={1}
+                max={100000}
+                step={1}
+                suffix={` ${unit}`}
+                orientation="horizontal"
+                onChange={setAmount}
               />
-            </label>
+            </div>
             <label>
               {ar ? "الوحدة" : "Unit"}
               <select
                 value={unit}
                 onChange={(e) => {
-                  setUnit(e.target.value as Unit);
+                  const nextUnit = e.target.value as Unit;
+                  setUnit(nextUnit);
                   setPortion(null);
+                  if (p.source === "manual" && ["g", "kg", "oz"].includes(nextUnit))
+                    setP({ ...p, basis: "g" });
+                  else if (p.source === "manual" && ["ml", "L"].includes(nextUnit))
+                    setP({ ...p, basis: "ml" });
                 }}
               >
                 {[
