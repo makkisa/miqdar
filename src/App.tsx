@@ -282,6 +282,13 @@ export default function App() {
         setEditor({ p });
         return;
       }
+      if (!p) {
+        // A barcode number alone cannot safely identify a similar food.
+        // Ask for its printed name instead of showing unrelated numeric hits.
+        setQuery("");
+        setSearched(true);
+        return;
+      }
       if (p) setBarcodeProduct(p);
       setQuery(p?.name && p.name !== code ? p.name : "");
       const matches = await searchFoods(
@@ -881,8 +888,8 @@ export default function App() {
                     !barcodeProduct && (
                       <p className="notice" role="status">
                         {t(
-                          "لم نجد تطابقًا كاملًا ببيانات موثوقة في Open Food Facts أو USDA. لا نعرض تخمينًا من رقم الباركود؛ ابحث باسم المنتج أو صوّر الملصق.",
-                          "No complete, reliable match was found in Open Food Facts or USDA. We do not guess from a barcode; search by product name or photograph the label.",
+                          "لم نعثر على هذا الباركود في Open Food Facts أو USDA. أدخل اسم المنتج للعثور على خيارات مشابهة ببيانات مكتملة، أو صوّر الملصق الغذائي.",
+                          "This barcode was not found in Open Food Facts or USDA. Enter the product name to find complete similar options, or photograph the nutrition label.",
                         )}
                       </p>
                     )}
