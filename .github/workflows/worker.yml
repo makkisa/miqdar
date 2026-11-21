@@ -35,7 +35,7 @@ jobs:
         run: |
           set +x
           printf '%s' "$GEMINI_API_KEY" | npx --yes wrangler@4.157.0 secret put GEMINI_API_KEY --config worker/wrangler.toml
-          npx --yes wrangler@4.157.0 deploy --config worker/wrangler.toml --account-id "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.157.0 deploy --config worker/wrangler.toml
       - name: Configure Pages API endpoint
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' && env.GEMINI_API_KEY != '' }}
         uses: actions/github-script@v7
