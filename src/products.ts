@@ -41,9 +41,24 @@ function tokens(value: string) {
 function relevance(query: string, p: Product) {
   const wanted = tokens(query);
   if (!wanted.length) return 0;
+  const normalizedName = normalized(p.name);
   const haystack = normalized(`${p.name} ${p.brand ?? ""}`);
   const matched = wanted.filter((word) => haystack.includes(word)).length;
-  return matched / wanted.length;
+  let score = matched / wanted.length;
+  if (normalizedName === normalized(query)) score += 0.2;
+  if (/\b(raw|fresh|whole|plain)\b/.test(normalizedName)) score += 0.2;
+  if (wanted.length === 1) {
+    const modifiers = tokens(p.name).filter(
+      (token) =>
+        !wanted.some((word) => token.startsWith(word) || word.startsWith(token)) &&
+        !/^(raw|fresh|whole|plain|ripe|overripe)$/.test(token),
+    );
+    score -= Math.min(0.75, modifiers.length * 0.35);
+  }
+  const processed = /\b(chips|crisps|dried|powder|cookie|cookies|yogurt|cereal|juice|smoothie|candy|snack|bar)\b/.test(normalizedName);
+  if (processed && !wanted.some((word) => normalizedName.includes(word) && /chips|dried|powder|cookie|yogurt|cereal|juice|smoothie|candy|snack|bar/.test(word))) score -= 0.35;
+  if (p.source.toLowerCase().includes("branded label")) score -= 0.25;
+  return score;
 }
 
 function hasMacros(p: Product) {
@@ -122,30 +137,27 @@ export function parseFDC(food: Record<string, unknown>): Product {
   const nutrients = Array.isArray(food.foodNutrients)
     ? (food.foodNutrients as FdcNutrient[])
     : [];
-  const find = (id: number, name: RegExp) => {
-    const item = nutrients.find(
+  const find = (id: number, name: RegExp, unit?: RegExp) => {
+    const exact = nutrients.find(
       (n) =>
         n.nutrientId === id ||
         n.nutrientNumber === String(id) ||
-        n.number === String(id) ||
-        name.test(n.nutrientName ?? n.name ?? ""),
+        n.number === String(id),
+    );
+    const item = exact ?? nutrients.find(
+      (n) =>
+        name.test(n.nutrientName ?? n.name ?? "") &&
+        (!unit || unit.test(n.unitName ?? "")),
     );
     return numeric(item?.value ?? item?.amount);
   };
-  const energyKcal = find(1008, /energy/i);
-  const energyKj = find(1062, /energy.*kj/i);
+  const energyKcal = find(1008, /energy/i, /kcal/i);
+  const energyKj = find(1062, /energy/i, /kj/i);
   const branded = food.dataType === "Branded";
-  const servingSize = numeric(food.servingSize);
   const servingUnit = String(food.servingSizeUnit ?? "").toLowerCase();
-  // USDA branded-label nutrients are per serving. Convert only when the
-  // serving's mass/volume is explicit; never assume ml equals grams.
-  const scaleFactor = branded && servingSize && ["g", "ml"].includes(servingUnit)
-    ? 100 / servingSize
-    : branded
-      ? null
-      : 1;
-  const scaleValue = (value: number | null) =>
-    value === null || scaleFactor === null ? null : value * scaleFactor;
+  // FDC standardizes branded nutrient values to a 100 g/100 ml basis.
+  // servingSize is metadata for portion conversion, not a multiplier here.
+  const scaleValue = (value: number | null) => value;
   const protein = scaleValue(find(1003, /protein/i));
   const carbs = scaleValue(find(1005, /carbohydrate/i));
   const fat = scaleValue(find(1004, /total lipid|total fat/i));
@@ -313,7 +325,16 @@ async function searchUSDA(query: string, signal: AbortSignal): Promise<Product[]
   return (result.foods ?? [])
     .map(parseFDC)
     .map((p) => ({ ...p, searchScore: relevance(query, p) }))
-    .filter((p) => p.searchScore >= 0.5 && hasMacros(p))
+    .filter(
+      (p) =>
+        p.searchScore >= 0.5 &&
+        hasMacros(p) &&
+        !(
+          p.source.includes("branded label") &&
+          !p.brand &&
+          normalized(p.name) === normalized(query)
+        ),
+    )
     .sort((a, b) => (b.searchScore ?? 0) - (a.searchScore ?? 0))
     .slice(0, 8)
     .map(({ searchScore: _score, ...p }) => p);
@@ -326,23 +347,27 @@ export async function searchFoods(text: string, signal: AbortSignal) {
   const cached = searchCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.products;
 
-  let off: Product[] = [];
-  try {
-    off = await searchOFF(query, signal);
-  } catch (error) {
-    if (signal.aborted) throw error;
-  }
-  let products = off;
-  if (off.length < 3 && !/^\d+$/.test(query)) {
-    try {
-      const usda = await searchUSDA(query, signal);
-      const known = new Set(off.map((p) => normalized(`${p.name} ${p.brand ?? ""}`)));
-      products = [...off, ...usda.filter((p) => !known.has(normalized(`${p.name} ${p.brand ?? ""}`)))];
-    } catch (error) {
-      if (signal.aborted) throw error;
-    }
-  }
-  const result = products.slice(0, 10);
+  const [offResult, usdaResult] = await Promise.allSettled([
+    searchOFF(query, signal),
+    /^\d+$/.test(query) ? Promise.resolve([]) : searchUSDA(query, signal),
+  ]);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  const candidates = [
+    ...(offResult.status === "fulfilled" ? offResult.value : []),
+    ...(usdaResult.status === "fulfilled" ? usdaResult.value : []),
+  ].map((p) => ({ ...p, searchScore: relevance(query, p) }));
+  const seen = new Set<string>();
+  const result = candidates
+    .filter((p) => p.searchScore >= 0.5)
+    .sort((a, b) => (b.searchScore ?? 0) - (a.searchScore ?? 0))
+    .filter((p) => {
+      const key = p.barcode || normalized(`${p.name} ${p.brand ?? ""}`);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 10)
+    .map(({ searchScore: _score, ...p }) => p);
   searchCache.set(key, { expiresAt: Date.now() + CACHE_TTL, products: result });
   if (searchCache.size > 40) {
     const oldest = searchCache.keys().next().value;

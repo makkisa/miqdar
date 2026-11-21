@@ -124,7 +124,8 @@ describe("nutrition", () => {
       fdcId: 101,
       description: "Raw oats",
       foodNutrients: [
-        { nutrientId: 1008, value: 389 },
+        { nutrientId: 1062, nutrientName: "Energy", unitName: "kJ", value: 1628 },
+        { nutrientId: 1008, nutrientName: "Energy", unitName: "KCAL", value: 389 },
         { nutrientId: 1003, value: 16.9 },
         { nutrientId: 1005, value: 66.3 },
         { nutrientId: 1004, value: 6.9 },
@@ -132,6 +133,42 @@ describe("nutrition", () => {
     });
     expect(p.source).toBe("USDA FoodData Central");
     expect(p.nutrients).toMatchObject({ kcal: 389, protein: 16.9, carbs: 66.3, fat: 6.9 });
+  });
+  it("does not mistake USDA kilojoules for kilocalories", () => {
+    const p = parseFDC({
+      fdcId: 104,
+      description: "Bananas, raw",
+      foodNutrients: [
+        { nutrientId: 1062, nutrientName: "Energy", unitName: "kJ", value: 371 },
+        { nutrientId: 1008, nutrientName: "Energy", unitName: "KCAL", value: 89 },
+        { nutrientId: 1003, value: 1.09 },
+        { nutrientId: 1005, value: 22.8 },
+        { nutrientId: 1004, value: 0.33 },
+      ],
+    });
+    expect(p.nutrients.kcal).toBe(89);
+  });
+  it("keeps USDA branded nutrients on the API's per-100 basis", () => {
+    const p = parseFDC({
+      fdcId: 103,
+      dataType: "Branded",
+      description: "Banana product",
+      servingSize: 32,
+      servingSizeUnit: "g",
+      foodNutrients: [
+        { nutrientId: 1008, value: 312 },
+        { nutrientId: 1003, value: 12.5 },
+        { nutrientId: 1005, value: 40.6 },
+        { nutrientId: 1004, value: 6.25 },
+      ],
+    });
+    expect(p.basis).toBe("g");
+    expect(p.nutrients).toMatchObject({
+      kcal: 312,
+      protein: 12.5,
+      carbs: 40.6,
+      fat: 6.25,
+    });
   });
   it("uses USDA as a cached fallback only after OFF has no complete match", async () => {
     vi.stubGlobal(
