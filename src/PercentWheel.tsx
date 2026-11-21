@@ -4,48 +4,58 @@ export default function PercentWheel({
   label,
   value,
   onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  suffix = "%",
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
 }) {
   const pointer = useRef({ y: 0, remainder: 0 });
-  const setValue = (next: number) => onChange(Math.max(0, Math.min(100, next)));
+  const setValue = (next: number) =>
+    onChange(Math.max(min, Math.min(max, Math.round((next - min) / step) * step + min)));
+  const format = (number: number) => `${number.toLocaleString()}${suffix}`;
 
   return (
     <div
       className="percent-wheel"
       role="spinbutton"
       aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
+      aria-valuemin={min}
+      aria-valuemax={max}
       aria-valuenow={value}
-      aria-valuetext={`${value}%`}
+      aria-valuetext={format(value)}
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === "ArrowUp" || event.key === "ArrowRight") {
           event.preventDefault();
-          setValue(value + 1);
+          setValue(value + step);
         } else if (event.key === "ArrowDown" || event.key === "ArrowLeft") {
           event.preventDefault();
-          setValue(value - 1);
+          setValue(value - step);
         } else if (event.key === "PageUp") {
           event.preventDefault();
-          setValue(value + 10);
+          setValue(value + step * 10);
         } else if (event.key === "PageDown") {
           event.preventDefault();
-          setValue(value - 10);
+          setValue(value - step * 10);
         } else if (event.key === "Home") {
           event.preventDefault();
-          setValue(0);
+          setValue(min);
         } else if (event.key === "End") {
           event.preventDefault();
-          setValue(100);
+          setValue(max);
         }
       }}
       onWheel={(event) => {
         event.preventDefault();
-        if (event.deltaY) setValue(value + (event.deltaY > 0 ? 1 : -1));
+        if (event.deltaY) setValue(value + (event.deltaY > 0 ? step : -step));
       }}
       onPointerDown={(event) => {
         if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -63,7 +73,7 @@ export default function PercentWheel({
           steps += step;
           pointer.current.remainder -= step * 18;
         }
-        if (steps) setValue(value + steps);
+        if (steps) setValue(value + steps * step);
       }}
       onPointerUp={(event) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId))
@@ -74,14 +84,14 @@ export default function PercentWheel({
         pointer.current.remainder = 0;
       }}
     >
-      {[value - 2, value - 1, value, value + 1, value + 2].map(
+      {[value - step * 2, value - step, value, value + step, value + step * 2].map(
         (option, index) => (
           <span
             key={`${option}-${index}`}
             className={`percent-wheel-value ${index === 2 ? "selected" : ""}`}
             aria-hidden="true"
           >
-            {option < 0 || option > 100 ? "·" : `${option}%`}
+            {option < min || option > max ? "·" : format(option)}
           </span>
         ),
       )}

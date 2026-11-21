@@ -284,8 +284,8 @@ export default function App() {
     setGoals(g);
     localStorage.setItem(`goals-${uid ?? "guest"}`, JSON.stringify(g));
   }
-  function updateCalorieGoal(amount: number) {
-    const kcal = Math.max(500, Math.min(10000, goals.kcal + amount));
+  function updateCalorieGoal(value: number) {
+    const kcal = Math.max(500, Math.min(10000, Math.round(value / 50) * 50));
     const g = {
       ...goals,
       kcal,
@@ -964,42 +964,22 @@ export default function App() {
                       "Set a calorie target and adjust macro shares; grams update instantly.",
                     )}
                   </p>
-                  <div className="grid2">
-                    <div className="goal-stepper-card">
-                      <span>
-                        {t("هدف السعرات اليومي", "Daily calorie goal")}
-                      </span>
-                      <div className="stepper-wheel calorie-wheel">
-                        <button
-                          type="button"
-                          aria-label={t("زيادة 50 سعرة", "Add 50 calories")}
-                          onClick={() => updateCalorieGoal(50)}
-                          disabled={goals.kcal >= 10000}
-                        >
-                          +
-                        </button>
-                        <output aria-live="polite">
-                          {goals.kcal.toLocaleString(ar ? "ar" : "en")}{" "}
-                          <small>kcal</small>
-                        </output>
-                        <button
-                          type="button"
-                          aria-label={t("إنقاص 50 سعرة", "Remove 50 calories")}
-                          onClick={() => updateCalorieGoal(-50)}
-                          disabled={goals.kcal <= 500}
-                        >
-                          −
-                        </button>
-                      </div>
-                      <small className="muted">
-                        {t(
-                          "كل ضغطة تغيّر الهدف 50 سعرة",
-                          "Each step changes the goal by 50 kcal",
-                        )}
-                      </small>
+                  <div className="goal-stepper-card">
+                    <div className="calorie-goal-copy">
+                      <span>{t("هدف السعرات اليومي", "DAILY ENERGY")}</span>
+                      <strong>{t("السعرات", "CALORIES")}</strong>
+                      <small>kcal · {t("خطوة 50", "50 per step")}</small>
                     </div>
-                  </div>
-                  <div className="macro-goals">
+                    <PercentWheel
+                      label={t("هدف السعرات اليومي", "Daily calorie goal")}
+                      value={goals.kcal}
+                      min={500}
+                      max={10000}
+                      step={50}
+                      suffix=""
+                      onChange={updateCalorieGoal}
+                    />
+                  </div>                  <div className="macro-goals">
                     {(["protein", "carbs", "fat"] as const).map((key) => {
                       const factor = key === "fat" ? 9 : 4;
                       const name = {
@@ -1007,17 +987,23 @@ export default function App() {
                         carbs: t("الكربوهيدرات", "Carbs"),
                         fat: t("الدهون", "Fat"),
                       }[key];
+                      const shortName = {
+                        protein: "PRO",
+                        carbs: "CARB",
+                        fat: "FAT",
+                      }[key];
                       return (
                         <div className="macro-stepper" key={key}>
-                          <div className="macro-stepper-info">
-                            <strong>{name}</strong>
-                            <span>
-                              {Math.round(
-                                (goals.kcal * ratios[key]) / 100 / factor,
-                              )}{" "}
-                              g
-                            </span>
+                          <div className="macro-stepper-head">
+                            <strong>{shortName}</strong>
+                            <span>{name}</span>
                           </div>
+                          <b className="macro-grams">
+                            {Math.round(
+                              (goals.kcal * ratios[key]) / 100 / factor,
+                            )}
+                            <small>g</small>
+                          </b>
                           <PercentWheel
                             label={name}
                             value={ratios[key]}

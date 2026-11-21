@@ -1,0 +1,18 @@
+name = "miqdar-ai"
+main = "./index.ts"
+compatibility_date = "2026-11-21"
+workers_dev = true
+preview_urls = false
+
+[vars]
+FIREBASE_PROJECT_ID = "miqdar-de610"
+GEMINI_MODEL = "gemini-3.8-flash"
+ALLOWED_ORIGIN = "https://makkisa.github.io"
+
+[[ratelimits]]
+name = "AI_RATE_LIMITER"
+namespace_id = "626710235"
+
+[ratelimits.simple]
+limit = 20
+period = 60

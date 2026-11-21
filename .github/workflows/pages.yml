@@ -2,6 +2,8 @@ name: Deploy Miqdar to GitHub Pages
 on:
   push:
     branches: [main]
+  repository_dispatch:
+    types: [miqdar-ai-ready]
   workflow_dispatch:
 permissions:
   contents: read
