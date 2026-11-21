@@ -8,7 +8,7 @@ import {
   backupSchema,
   caloriesFromMacros,
 } from "../src/domain";
-import { parseOFF, lookup } from "../src/products";
+import { parseFDC, parseOFF, lookup, searchFoods, searchOFF } from "../src/products";
 const n = { kcal: 200, protein: 10, carbs: 20, fat: 5 };
 describe("nutrition", () => {
   it("calculates energy from macros with 4/4/9 factors", () => {
@@ -72,6 +72,130 @@ describe("nutrition", () => {
     });
     expect(p.nutrients.protein).toBeNull();
     expect(p.nutrients.kcal).toBe(200);
+  });
+  it("parses OFF nutrient numbers returned as strings", () => {
+    const p = parseOFF({
+      code: "12345678",
+      product_name: "Oat milk",
+      brands: "North Farm",
+      nutrition_data_per: "100ml",
+      nutriments: {
+        "energy-kcal_100ml": "46",
+        proteins_100ml: "1.2",
+        carbohydrates_100ml: "6.8",
+        fat_100ml: "1.5",
+      },
+    });
+    expect(p.name).toBe("Oat milk");
+    expect(p.brand).toBe("North Farm");
+    expect(p.basis).toBe("ml");
+    expect(p.nutrients).toMatchObject({ kcal: 46, protein: 1.2, carbs: 6.8, fat: 1.5 });
+  });
+  it("derives calories from complete OFF macros when energy is absent", () => {
+    const p = parseOFF({
+      code: "22345678",
+      product_name: "Yogurt",
+      nutriments: {
+        proteins_100g: "10",
+        carbohydrates_100g: "5",
+        fat_100g: "2",
+      },
+    });
+    expect(p.nutrients.kcal).toBe(78);
+  });
+  it("infers milliliter basis from ml-only nutrient values", () => {
+    const p = parseOFF({
+      code: "32345678",
+      product_name: "Drink",
+      nutriments: {
+        proteins_100ml: "1",
+        carbohydrates_100ml: "3",
+        fat_100ml: "0",
+      },
+    });
+    expect(p.basis).toBe("ml");
+  });
+  it("maps complete USDA macro and energy values", () => {
+    const p = parseFDC({
+      fdcId: 101,
+      description: "Raw oats",
+      foodNutrients: [
+        { nutrientId: 1008, value: 389 },
+        { nutrientId: 1003, value: 16.9 },
+        { nutrientId: 1005, value: 66.3 },
+        { nutrientId: 1004, value: 6.9 },
+      ],
+    });
+    expect(p.source).toBe("USDA FoodData Central");
+    expect(p.nutrients).toMatchObject({ kcal: 389, protein: 16.9, carbs: 66.3, fat: 6.9 });
+  });
+  it("uses USDA as a cached fallback only after OFF has no complete match", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ products: [] }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            foods: [
+              {
+                fdcId: 102,
+                description: "Raw oats",
+                foodNutrients: [
+                  { nutrientId: 1008, value: 389 },
+                  { nutrientId: 1003, value: 16.9 },
+                  { nutrientId: 1005, value: 66.3 },
+                  { nutrientId: 1004, value: 6.9 },
+                ],
+              },
+            ],
+          }),
+        }),
+    );
+    const results = await searchFoods("raw oats fallback", new AbortController().signal);
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe("Raw oats");
+    expect(results[0].source).toBe("USDA FoodData Central");
+    vi.unstubAllGlobals();
+  });
+  it("filters unrelated and incomplete OFF search results", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          products: [
+            {
+              code: "1",
+              product_name: "Oat milk unsweetened",
+              nutriments: {
+                proteins_100g: "1",
+                carbohydrates_100g: "6",
+                fat_100g: "2",
+              },
+            },
+            {
+              code: "2",
+              product_name: "Oat milk missing values",
+              nutriments: { proteins_100g: "1" },
+            },
+            {
+              code: "3",
+              product_name: "Apple juice",
+              nutriments: {
+                proteins_100g: "1",
+                carbohydrates_100g: "6",
+                fat_100g: "2",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    const results = await searchOFF("oat milk", new AbortController().signal);
+    expect(results.map((p) => p.name)).toEqual(["Oat milk unsweetened"]);
+    vi.unstubAllGlobals();
   });
   it("handles unknown barcodes", async () => {
     vi.stubGlobal(

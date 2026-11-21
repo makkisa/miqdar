@@ -8,6 +8,7 @@ export default function PercentWheel({
   max = 100,
   step = 1,
   suffix = "%",
+  orientation = "vertical",
 }: {
   label: string;
   value: number;
@@ -16,8 +17,9 @@ export default function PercentWheel({
   max?: number;
   step?: number;
   suffix?: string;
+  orientation?: "vertical" | "horizontal";
 }) {
-  const pointer = useRef({ y: 0, remainder: 0 });
+  const pointer = useRef({ x: 0, y: 0, remainder: 0 });
   const setValue = (next: number) =>
     onChange(
       Math.max(
@@ -29,7 +31,7 @@ export default function PercentWheel({
 
   return (
     <div
-      className="percent-wheel"
+      className={`percent-wheel ${orientation}`}
       role="spinbutton"
       aria-label={label}
       aria-valuemin={min}
@@ -65,11 +67,19 @@ export default function PercentWheel({
       onPointerDown={(event) => {
         if (event.pointerType === "mouse" && event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
-        pointer.current = { y: event.clientY, remainder: 0 };
+        pointer.current = {
+          x: event.clientX,
+          y: event.clientY,
+          remainder: 0,
+        };
       }}
       onPointerMove={(event) => {
         if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-        const moved = pointer.current.y - event.clientY;
+        const moved =
+          orientation === "horizontal"
+            ? event.clientX - pointer.current.x
+            : pointer.current.y - event.clientY;
+        pointer.current.x = event.clientX;
         pointer.current.y = event.clientY;
         pointer.current.remainder += moved;
         let steps = 0;

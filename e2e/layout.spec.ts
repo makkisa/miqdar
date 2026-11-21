@@ -8,7 +8,7 @@ test("responsive RTL/LTR has no horizontal overflow", async ({
 }, info) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "يومك، بتوازن." }),
+    page.getByRole("heading", { name: "ملخص اليوم" }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -19,7 +19,7 @@ test("responsive RTL/LTR has no horizontal overflow", async ({
     await page.screenshot({ path: "../MakkiHero-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "EN", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Your day, in balance." }),
+    page.getByRole("heading", { name: "Daily overview" }),
   ).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   expect(

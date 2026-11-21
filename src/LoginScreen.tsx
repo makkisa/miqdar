@@ -63,7 +63,7 @@ export default function LoginScreen({
           مِقدار <span>MIQDAR</span>
         </p>
         <h1 id="login-title">
-          {t("خطوتك الأولى نحو التوازن.", "Your first step toward balance.")}
+          {t("تتبّع السعرات والماكروز", "Calories & macro tracker")}
         </h1>
         <p className="muted">
           {t(

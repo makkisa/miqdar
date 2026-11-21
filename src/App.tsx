@@ -16,6 +16,7 @@ import {
   WifiOff,
   Check,
   Search,
+  PackageSearch,
   LogOut,
 } from "lucide-react";
 import { onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
@@ -33,7 +34,7 @@ import {
   type Entry,
   type Nutrients,
 } from "./domain";
-import { lookup, searchOFF } from "./products";
+import { lookup, searchFoods } from "./products";
 import PercentWheel from "./PercentWheel";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import LoginScreen from "./LoginScreen";
@@ -150,6 +151,58 @@ export default function App() {
       clearInterval(interval);
     };
   }, [date]);
+  useEffect(() => {
+    const firestore = cloud;
+    if (!uid || !firestore) return;
+    const key = `daily-sync-checkpoint-${uid}`;
+    let timer: number | undefined;
+    let active = true;
+    let running = false;
+    const checkpointDay = () => {
+      const now = new Date();
+      if (now.getHours() > 23 || (now.getHours() === 23 && now.getMinutes() >= 59))
+        return localDate(now);
+      const previous = new Date(now);
+      previous.setDate(previous.getDate() - 1);
+      return localDate(previous);
+    };
+    const checkpoint = async () => {
+      if (!active || running || !navigator.onLine) return;
+      const day = checkpointDay();
+      if (localStorage.getItem(key) === day) return;
+      running = true;
+      try {
+        await waitForPendingWrites(firestore);
+        if (active) localStorage.setItem(key, day);
+      } catch {
+        // Firestore keeps retrying pending writes; the next foreground/online
+        // checkpoint will wait for them again.
+      } finally {
+        running = false;
+      }
+    };
+    const schedule = () => {
+      const next = new Date();
+      next.setHours(23, 59, 0, 0);
+      if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+      timer = window.setTimeout(() => {
+        void checkpoint().finally(schedule);
+      }, next.getTime() - Date.now());
+    };
+    const onActive = () => {
+      if (!document.hidden) void checkpoint();
+    };
+    void checkpoint();
+    schedule();
+    window.addEventListener("online", onActive);
+    document.addEventListener("visibilitychange", onActive);
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("online", onActive);
+      document.removeEventListener("visibilitychange", onActive);
+    };
+  }, [uid]);
   useEffect(() => () => controller.current?.abort(), []);
   const entries = data.entries
     .filter((e) => !e.deleted && e.date === date)
@@ -231,7 +284,7 @@ export default function App() {
       }
       if (p) setBarcodeProduct(p);
       setQuery(p?.name && p.name !== code ? p.name : "");
-      const matches = await searchOFF(
+      const matches = await searchFoods(
         p?.name && p.name !== code ? p.name : code,
         controller.current.signal,
       );
@@ -314,7 +367,9 @@ export default function App() {
       <button className="food-name" onClick={() => setEditor({ p })}>
         <strong>{p.name}</strong>
         <small>
-          {p.source} · {p.lastQuantity} {p.basis}
+          {[p.brand, p.source, `${p.lastQuantity} ${p.basis}`]
+            .filter(Boolean)
+            .join(" · ")}
         </small>
       </button>
       <button
@@ -350,9 +405,6 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <Brand />
-        <p className="muted">
-          {t("كل يوم، أقرب لهدفك.", "Every day, closer to your goal.")}
-        </p>
         {[
           ["home", Home, t("نظرة اليوم", "Today")],
           ["library", BookOpen, t("مكتبتي", "My foods")],
@@ -370,14 +422,6 @@ export default function App() {
             </button>
           );
         })}
-        <div className="sidebar-bottom">
-          <span className="eyebrow">BUILT FOR YOUR EVERYDAY</span>
-          <p>
-            Small habits.
-            <br />
-            <strong>Stronger you.</strong>
-          </p>
-        </div>
       </aside>
       <div className="workspace">
         <header>
@@ -454,18 +498,9 @@ export default function App() {
                   <div className="page-heading">
                     <div>
                       <span className="eyebrow">
-                        {t(
-                          "خطوة صغيرة. فرق كبير.",
-                          "SMALL STEPS. REAL PROGRESS.",
-                        )}
+                        {t("مقدار اليوم", "TODAY AT A GLANCE")}
                       </span>
-                      <h1>{t("يومك، بتوازن.", "Your day, in balance.")}</h1>
-                      <p className="muted">
-                        {t(
-                          "غذاؤك أوضح، وهدفك أقرب.",
-                          "A clearer picture of your nutrition.",
-                        )}
-                      </p>
+                      <h1>{t("ملخص اليوم", "Daily overview")}</h1>
                     </div>
                     <label className="date-label">
                       <input
@@ -681,24 +716,97 @@ export default function App() {
               )}
               {page === "library" && (
                 <section className="panel">
-                  <h1>{t("مكتبتي الغذائية", "My food library")}</h1>
-                  <label className="search">
-                    <Search size={20} />
-                    <input
-                      aria-label={t("بحث", "Search")}
-                      value={query}
-                      onChange={(e) => {
-                        setQuery(e.target.value);
-                        controller.current?.abort();
-                        setSimilar([]);
-                        setBarcodeProduct(null);
-                      }}
-                      placeholder={t(
-                        "ابحث عن طعام محفوظ أو منتج…",
-                        "Search your foods or a product…",
+                  <div className="library-heading">
+                    <div>
+                      <span className="eyebrow">
+                        {t("الأطعمة المحفوظة وقواعد البيانات", "SAVED FOODS & DATABASES")}
+                      </span>
+                      <h1>{t("ابحث عن طعام", "Find a food")}</h1>
+                    </div>
+                    <PackageSearch size={30} aria-hidden="true" />
+                  </div>
+                  <div className="food-search">
+                    <label className="search search-field">
+                      <Search size={22} aria-hidden="true" />
+                      <input
+                        aria-label={t("بحث عن طعام", "Search foods")}
+                        value={query}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && query.trim().length >= 2) {
+                            event.preventDefault();
+                            controller.current?.abort();
+                            const active = new AbortController();
+                            controller.current = active;
+                            setBusy(true);
+                            setSearched(true);
+                            setSimilar([]);
+                            void searchFoods(query, active.signal)
+                              .then(setSimilar)
+                              .catch((e) => {
+                                if ((e as Error).name !== "AbortError") fail();
+                              })
+                              .finally(() => {
+                                if (!active.signal.aborted) setBusy(false);
+                              });
+                          }
+                        }}
+                        onChange={(e) => {
+                          setQuery(e.target.value);
+                          controller.current?.abort();
+                          setSimilar([]);
+                          setSearched(false);
+                          setBarcodeProduct(null);
+                        }}
+                        placeholder={t(
+                          "اكتب اسم الطعام أو العلامة التجارية",
+                          "Food name or brand",
+                        )}
+                      />
+                      {query && (
+                        <button
+                          type="button"
+                          className="search-clear"
+                          aria-label={t("مسح البحث", "Clear search")}
+                          onClick={() => {
+                            controller.current?.abort();
+                            setQuery("");
+                            setSimilar([]);
+                            setSearched(false);
+                            setBarcodeProduct(null);
+                          }}
+                        >
+                          ×
+                        </button>
                       )}
-                    />
-                  </label>
+                    </label>
+                    <button
+                      className="primary search-submit"
+                      disabled={query.trim().length < 2 || busy}
+                      onClick={() => {
+                        controller.current?.abort();
+                        const active = new AbortController();
+                        controller.current = active;
+                        setBusy(true);
+                        setSearched(true);
+                        setSimilar([]);
+                        void searchFoods(query, active.signal)
+                          .then(setSimilar)
+                          .catch((e) => {
+                            if ((e as Error).name !== "AbortError") fail();
+                          })
+                          .finally(() => {
+                            if (!active.signal.aborted) setBusy(false);
+                          });
+                      }}
+                    >
+                      <Search size={21} />
+                      {t("ابحث", "Search")}
+                    </button>
+                  </div>
+                  <div className="search-sources" aria-label={t("مصادر البحث", "Search sources")}>
+                    <span><span className="source-dot" /> Open Food Facts</span>
+                    <span><span className="source-dot secondary" /> USDA FoodData Central</span>
+                  </div>
                   {barcodeProduct && (
                     <div className="barcode-gap-card">
                       <span className="eyebrow">
@@ -755,30 +863,10 @@ export default function App() {
                       ) : null}
                     </div>
                   )}
-                  <div className="row">
+                  <div className="library-actions">
                     <button onClick={() => setEditor({})}>
                       <Plus size={18} />
                       {t("طعام جديد", "New food")}
-                    </button>
-                    <button
-                      disabled={query.trim().length < 2 || busy}
-                      onClick={async () => {
-                        controller.current?.abort();
-                        controller.current = new AbortController();
-                        setBusy(true);
-                        try {
-                          setSearched(true);
-                          setSimilar(
-                            await searchOFF(query, controller.current.signal),
-                          );
-                        } catch (e) {
-                          if ((e as Error).name !== "AbortError") fail();
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      {t("البحث في Open Food Facts", "Search Open Food Facts")}
                     </button>
                   </div>
                   {busy && <p role="status">{t("جارٍ البحث…", "Searching…")}</p>}
@@ -788,8 +876,8 @@ export default function App() {
                     !barcodeProduct && (
                       <p className="notice" role="status">
                         {t(
-                          "تعذر العثور على بيانات غذائية كاملة. جرّب اسم المنتج؛ وإن لم تتوفر بيانات موثوقة صوّر الملصق.",
-                          "No complete nutrition record found. Search by product name; if reliable data is unavailable, photograph the label.",
+                          "لم نجد نتيجة موثوقة مكتملة. جرّب صياغة أخرى أو صوّر الملصق الغذائي.",
+                          "No reliable complete match. Try another search phrase or photograph the nutrition label.",
                         )}
                       </p>
                     )}
@@ -801,21 +889,44 @@ export default function App() {
                     .map(productRow)}
                   {similar.length > 0 && (
                     <>
-                      <p className="notice">
-                        {t(
-                          "هذه منتجات مشابهة وليست مطابقة. اختر وراجع قبل التسجيل.",
-                          "Similar products, not exact matches. Choose and review before logging.",
-                        )}
+                      <p className="search-results-label">
+                        {barcodeProduct
+                          ? t(
+                              "هذه اقتراحات مشابهة وليست مطابقة للباركود. راجع الملصق قبل التسجيل.",
+                              "These are similar suggestions, not barcode matches. Verify the label before logging.",
+                            )
+                          : t(
+                              "نتائج قريبة من عبارتك ببيانات ماكروز كاملة. راجع الاسم والقيم قبل التسجيل.",
+                              "Relevant results with complete macros. Review the food and values before logging.",
+                            )}
                       </p>
-                      {similar.map((p) => (
-                        <button
-                          className="similar"
-                          key={p.id}
-                          onClick={() => setEditor({ p })}
-                        >
-                          {p.name} · {t("مراجعة", "Review")}
-                        </button>
-                      ))}
+                      <div className="search-results">
+                        {similar.map((p) => (
+                          <button
+                            className="search-result"
+                            key={p.id}
+                            onClick={() => setEditor({ p })}
+                          >
+                            <span className="search-result-icon">
+                              <Utensils size={23} aria-hidden="true" />
+                            </span>
+                            <span className="search-result-copy">
+                              <strong>{p.name}</strong>
+                              {p.brand && <small>{p.brand}</small>}
+                              <small className="search-source-label">
+                                {p.source} · {t("لكل 100", "per 100")} {p.basis}
+                              </small>
+                              <span className="search-macros" aria-label={t("القيم الغذائية", "Nutrition values")}>
+                                <b>{p.nutrients.kcal === null ? "—" : Math.round(p.nutrients.kcal)} <small>kcal</small></b>
+                                <b>PRO {Math.round(p.nutrients.protein ?? 0)}<small>g</small></b>
+                                <b>CARB {Math.round(p.nutrients.carbs ?? 0)}<small>g</small></b>
+                                <b>FAT {Math.round(p.nutrients.fat ?? 0)}<small>g</small></b>
+                              </span>
+                            </span>
+                            <span className="search-result-action">{t("راجع", "Review")}</span>
+                          </button>
+                        ))}
+                      </div>
                     </>
                   )}
                   {searched &&
@@ -868,31 +979,20 @@ export default function App() {
               )}
               {page === "settings" && (
                 <section className="panel settings">
-                  <h1>{t("على مقاس هدفك", "Make it yours")}</h1>
-                  <h2>{t("الحساب والمزامنة", "Account & sync")}</h2>
+                  <h1>{t("الإعدادات", "Settings")}</h1>
+                  <h2>{t("الحساب", "Account")}</h2>
                   <div className="account-card">
                     <span className="account-mark">
                       <Cloud size={28} />
                     </span>
                     <div>
                       <span className="eyebrow">MIQDAR CLOUD</span>
-                      <h3>
-                        {t(
-                          "بياناتك معك، أينما كنت.",
-                          "Your progress, wherever you go.",
-                        )}
-                      </h3>
-                      <p>
-                        {configured
-                          ? t(
-                              "حساب Google واحد لمزامنة سجل طعامك بأمان.",
-                              "One Google account to securely sync your food diary.",
-                            )
-                          : t(
-                              "الربط السحابي بانتظار إعداد مشروع Firebase. يمكنك الاستمرار محليًا الآن.",
-                              "Cloud connection awaits Firebase project setup. You can keep using local mode.",
-                            )}
-                      </p>
+                      <h3>{t("حساب Google", "Google account")}</h3>
+                      <ul className="account-points">
+                        <li>{t("مزامنة تلقائية يومية عند توفر الاتصال", "Daily automatic sync when online")}</li>
+                        <li>{t("حفظ التغييرات محليًا عند انقطاع الشبكة", "Keep changes locally while offline")}</li>
+                        <li>{configured ? t("بيانات منفصلة وآمنة لكل حساب", "Private data per account") : t("الربط السحابي يحتاج إعداد Firebase", "Cloud sync needs Firebase setup")}</li>
+                      </ul>
                     </div>
                   </div>
                   <p>
@@ -949,12 +1049,6 @@ export default function App() {
                       </a>
                     </p>
                   )}
-                  <p className="muted">
-                    {t(
-                      "تسجيل الخروج يتطلب مزامنة التغييرات أولًا. بيانات الضيف منفصلة ولا تنتقل تلقائيًا للحساب.",
-                      "Sign-out requires pending changes to sync. Guest data is separate and is not imported automatically.",
-                    )}
-                  </p>
                   <h2>
                     {t("أهداف السعرات والماكروز", "Calorie & macro goals")}
                   </h2>
@@ -977,6 +1071,7 @@ export default function App() {
                       max={10000}
                       step={50}
                       suffix=""
+                      orientation="horizontal"
                       onChange={updateCalorieGoal}
                     />
                   </div>{" "}
@@ -1087,8 +1182,7 @@ export default function App() {
           )}
         </main>
         <footer>
-          مِقدار <span>·</span>{" "}
-          {t("خطوة أقرب، كل يوم.", "A little closer, every day.")}
+          مِقدار <span>·</span> {t("تتبّع السعرات والماكروز", "Calories & macros")}
         </footer>
       </div>
       <nav className="bottom-nav">

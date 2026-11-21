@@ -5,7 +5,7 @@ test("signed-out visitors only see login, including reload and direct navigation
 }) => {
   await page.goto("/#settings");
   await expect(
-    page.getByRole("heading", { name: "خطوتك الأولى نحو التوازن." }),
+    page.getByRole("heading", { name: "تتبّع السعرات والماكروز" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "تسجيل الدخول بحساب Google" }),
@@ -39,7 +39,7 @@ test("login is responsive in Arabic and English", async ({ page }) => {
   ).toBe(true);
   await page.getByRole("button", { name: "EN", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Your first step toward balance." }),
+    page.getByRole("heading", { name: "Calories & macro tracker" }),
   ).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   expect(

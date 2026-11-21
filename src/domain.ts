@@ -16,6 +16,7 @@ export function caloriesFromMacros(
 export const productSchema = z.object({
   id: z.string().min(1).max(128),
   name: z.string().min(1).max(200),
+  brand: z.string().max(200).optional(),
   basis: z.enum(["g", "ml"]),
   nutrients: nutrientsSchema,
   source: z.string().max(100),

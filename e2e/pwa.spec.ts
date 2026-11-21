@@ -13,12 +13,12 @@ test("installed service worker reopens the app offline", async ({
   });
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "خطوتك الأولى نحو التوازن." }),
+    page.getByRole("heading", { name: "تتبّع السعرات والماكروز" }),
   ).toBeVisible();
   await context.setOffline(true);
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "خطوتك الأولى نحو التوازن." }),
+    page.getByRole("heading", { name: "تتبّع السعرات والماكروز" }),
   ).toBeVisible();
   await expect(page.locator(".app, .bottom-nav")).toHaveCount(0);
   await context.setOffline(false);
