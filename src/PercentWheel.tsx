@@ -19,7 +19,12 @@ export default function PercentWheel({
 }) {
   const pointer = useRef({ y: 0, remainder: 0 });
   const setValue = (next: number) =>
-    onChange(Math.max(min, Math.min(max, Math.round((next - min) / step) * step + min)));
+    onChange(
+      Math.max(
+        min,
+        Math.min(max, Math.round((next - min) / step) * step + min),
+      ),
+    );
   const format = (number: number) => `${number.toLocaleString()}${suffix}`;
 
   return (
@@ -84,17 +89,21 @@ export default function PercentWheel({
         pointer.current.remainder = 0;
       }}
     >
-      {[value - step * 2, value - step, value, value + step, value + step * 2].map(
-        (option, index) => (
-          <span
-            key={`${option}-${index}`}
-            className={`percent-wheel-value ${index === 2 ? "selected" : ""}`}
-            aria-hidden="true"
-          >
-            {option < min || option > max ? "·" : format(option)}
-          </span>
-        ),
-      )}
+      {[
+        value - step * 2,
+        value - step,
+        value,
+        value + step,
+        value + step * 2,
+      ].map((option, index) => (
+        <span
+          key={`${option}-${index}`}
+          className={`percent-wheel-value ${index === 2 ? "selected" : ""}`}
+          aria-hidden="true"
+        >
+          {option < min || option > max ? "·" : format(option)}
+        </span>
+      ))}
     </div>
   );
 }

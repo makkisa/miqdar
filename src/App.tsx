@@ -979,7 +979,8 @@ export default function App() {
                       suffix=""
                       onChange={updateCalorieGoal}
                     />
-                  </div>                  <div className="macro-goals">
+                  </div>{" "}
+                  <div className="macro-goals">
                     {(["protein", "carbs", "fat"] as const).map((key) => {
                       const factor = key === "fat" ? 9 : 4;
                       const name = {
