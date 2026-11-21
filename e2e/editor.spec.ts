@@ -17,11 +17,15 @@ test("manual calories react to macros and quantity and save the derived result",
     </script>` }));
   await page.goto("/editor-test");
   await page.getByLabel("اسم الطعام").fill("اختبار الماكروز");
+  await page.getByRole("button", { name: "إدخال الماكروز" }).click();
   await expect(page.getByRole("spinbutton", { name: "السعرات", exact: true })).toHaveCount(0);
   await page.getByLabel("البروتين", { exact: true }).fill("1");
-  await expect(page.getByLabel("السعرات المحسوبة")).toHaveText("4 kcal");
+  await expect(page.getByLabel("السعرات المحسوبة")).toHaveText("— kcal");
   await page.getByLabel("الكربوهيدرات", { exact: true }).fill("2");
   await page.getByLabel("الدهون", { exact: true }).fill("1");
+  await expect(page.getByLabel("البروتين", { exact: true })).toHaveValue("1");
+  await expect(page.getByLabel("الكربوهيدرات", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("الدهون", { exact: true })).toHaveValue("1");
   await expect(page.getByLabel("السعرات المحسوبة")).toHaveText("21 kcal");
   const quantity = page.getByRole("spinbutton", { name: "الكمية" });
   for (let index = 0; index < 100; index++) await quantity.press("ArrowUp");

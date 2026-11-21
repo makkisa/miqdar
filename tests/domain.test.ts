@@ -7,6 +7,7 @@ import {
   aiSchema,
   backupSchema,
   caloriesFromMacros,
+  emptyNutrients,
 } from "../src/domain";
 import { parseFDC, parseOFF, lookup, searchFoods, searchOFF } from "../src/products";
 const n = { kcal: 200, protein: 10, carbs: 20, fat: 5 };
@@ -20,6 +21,9 @@ describe("nutrition", () => {
       19.5,
     );
     expect(caloriesFromMacros({ protein: null, carbs: 0, fat: 0 })).toBeNull();
+  });
+  it("ignores a missing source-calorie field when all macros are available", () => {
+    expect(caloriesFromMacros({ ...emptyNutrients(), protein: 1, carbs: 2, fat: 1 })).toBe(21);
   });
   it("scales quantities", () =>
     expect(scale(n, 150)).toEqual({

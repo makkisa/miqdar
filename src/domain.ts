@@ -9,7 +9,7 @@ export type Nutrients = z.infer<typeof nutrientsSchema>;
 export function caloriesFromMacros(
   n: Pick<Nutrients, "protein" | "carbs" | "fat">,
 ): number | null {
-  if (Object.values(n).some((v) => v === null || !Number.isFinite(v) || v < 0))
+  if ([n.protein, n.carbs, n.fat].some((v) => v === null || !Number.isFinite(v) || v < 0))
     return null;
   return n.protein! * 4 + n.carbs! * 4 + n.fat! * 9;
 }
