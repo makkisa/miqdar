@@ -15,6 +15,18 @@ export type Data = {
   cached: boolean;
 };
 let refreshGuest: (() => void) | undefined;
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value))
+    return value.map((item) => stripUndefined(item)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, stripUndefined(item)]),
+    ) as T;
+  }
+  return value;
+}
 export function subscribe(
   uid: string | null,
   notify: (data: Data) => void,
@@ -80,7 +92,9 @@ export async function save(
   value: Entry | Product,
   onError: (e: Error) => void,
 ) {
-  const valid = (key === "entries" ? entrySchema : productSchema).parse(value);
+  const valid = stripUndefined(
+    (key === "entries" ? entrySchema : productSchema).parse(value),
+  );
   if (uid && cloud) {
     void setDoc(doc(cloud, "users", uid, key, valid.id), valid).catch(onError);
     return;

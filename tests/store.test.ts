@@ -41,3 +41,20 @@ it("retries overwrite stable IDs, persists edits and tombstones", async () => {
   expect(error).not.toHaveBeenCalled();
   stop();
 });
+it("persists multiple distinct entries and omits undefined optional fields", async () => {
+  const error = vi.fn();
+  let state: Data | undefined;
+  const stop = subscribe(null, (s) => (state = s), error);
+  await save(null, "entries", {
+    ...entry,
+    id: "second-operation-id",
+    product: { ...entry.product, id: "branded-food", brand: undefined },
+  }, error);
+  await vi.waitFor(() => expect(state?.entries.some((item) => item.id === "second-operation-id")).toBe(true));
+  expect(state?.entries.some((item) => item.id === "fixed-operation-id")).toBe(true);
+  const second = state?.entries.find((item) => item.id === "second-operation-id");
+  expect(second).toBeDefined();
+  expect(Object.hasOwn(second!.product, "brand")).toBe(false);
+  expect(error).not.toHaveBeenCalled();
+  stop();
+});
