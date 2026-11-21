@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Camera } from "lucide-react";
 import { getToken } from "firebase/app-check";
 import { auth, appCheck } from "./firebase";
 import {
@@ -77,7 +78,6 @@ export default function AI({
   const [mode] = useState(initialMode);
   const [prompt, setPrompt] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ReturnType<
@@ -137,7 +137,9 @@ export default function AI({
                 },
                 body: JSON.stringify({
                   mode,
-                  prompt,
+                  prompt: mode === "label"
+                    ? `${prompt}\nRead the nutrition label carefully. Prioritize transcribing kcal, protein, total carbohydrate, and total fat exactly as printed, with their stated basis and units. If a value is not legible or not shown, return null; never infer it.`
+                    : prompt,
                   image,
                   remaining,
                   entries: entries.slice(-30).map((e) => ({
@@ -145,12 +147,21 @@ export default function AI({
                     name: e.product.name,
                     quantity: e.quantity,
                   })),
-                  consent,
+                  // The user explicitly starts the analysis by pressing the
+                  // Analyze button; this preserves the backend's consent gate.
+                  consent: true,
                 }),
               },
             );
-            if (!r.ok) throw Error(String(r.status));
-            const parsed = aiSchema.parse(await r.json());
+            const payload = await r.json().catch(() => null);
+            if (!r.ok) {
+              const code =
+                payload && typeof payload.error === "string"
+                  ? payload.error
+                  : `http-${r.status}`;
+              throw Error(code);
+            }
+            const parsed = aiSchema.parse(payload);
             setResult(parsed);
             if (
               mode === "label" &&
@@ -167,12 +178,28 @@ export default function AI({
               }
             }
             setFile(null);
-          } catch {
-            setError(
-              ar
-                ? "تعذرت الخدمة. تحقق من تسجيل الدخول وإعداد الخادم والحصة المتاحة. التسجيل اليدوي متاح."
-                : "Service unavailable. Check sign-in, server setup and quota. Manual logging remains available.",
-            );
+          } catch (cause) {
+            const code = cause instanceof TypeError
+              ? "network"
+              : cause instanceof Error ? cause.message : "unknown";
+            const messages: Record<string, [string, string]> = {
+              auth: ["انتهت جلسة الدخول. سجّل الدخول مجددًا ثم أعد المحاولة.", "Your sign-in expired. Sign in again and retry."],
+              quota: ["وصلت الخدمة إلى حد الاستخدام الحالي. جرّب لاحقًا أو أدخل القيم يدويًا.", "The AI service reached its current usage limit. Try later or enter values manually."],
+              too_large: ["الصورة أكبر من الحد الذي يقبله الخادم. التقط صورة أوضح وأصغر.", "The image exceeds the server limit. Take a smaller, clearer photo."],
+              "image-size": ["حجم الصورة كبير جدًا. اختر صورة أصغر من 20 ميجابايت.", "The image is too large. Choose an image under 20 MB."],
+              request_failed: ["تعذر على خدمة Gemini تحليل الصورة الآن. قد تكون الخدمة أو الحصة غير متاحة؛ أعد المحاولة أو أدخل القيم يدويًا.", "Gemini could not analyze the image. The service or quota may be unavailable; retry or enter values manually."],
+              upstream: ["تعذر على خدمة Gemini تحليل الصورة الآن. أعد المحاولة أو أدخل القيم يدويًا.", "Gemini could not analyze the image. Retry or enter values manually."],
+              invalid_request: ["تعذر إرسال الصورة بهذا الحجم أو التنسيق. جرّب صورة أخرى.", "The image could not be sent in this size or format. Try another photo."],
+              "http-401": ["انتهت جلسة الدخول. سجّل الدخول مجددًا ثم أعد المحاولة.", "Your sign-in expired. Sign in again and retry."],
+              "http-429": ["وصلت الخدمة إلى حد الاستخدام الحالي. جرّب لاحقًا.", "The AI service reached its current usage limit. Try later."],
+              "http-413": ["الصورة أكبر من الحد الذي يقبله الخادم. التقط صورة أصغر.", "The image exceeds the server limit. Take a smaller photo."],
+              network: ["تعذر الاتصال بخدمة التحليل. تحقق من الإنترنت وحاول مجددًا.", "Could not reach the analysis service. Check your connection and retry."],
+            };
+            const [arMessage, enMessage] = messages[code] ?? [
+              "تعذر تحليل الصورة الآن. أعد المحاولة أو أدخل القيم يدويًا.",
+              "Image analysis failed. Retry or enter the values manually.",
+            ];
+            setError(ar ? arMessage : enMessage);
           } finally {
             setBusy(false);
           }
@@ -194,14 +221,16 @@ export default function AI({
             />
           </label>
         )}
-        <label className="file-button">
-          {mode === "label"
-            ? ar
-              ? "التقط صورة الملصق الغذائي"
-              : "Photograph the nutrition label"
-            : ar
-              ? "التقط صورة الوجبة"
-              : "Photograph the meal"}
+        <label className="file-button camera-capture">
+          <span className="camera-capture-icon"><Camera size={24} /></span>
+          <span className="camera-capture-copy">
+            <strong>{mode === "label"
+              ? ar ? "صوّر جدول القيم الغذائية" : "Photograph nutrition facts"
+              : ar ? "صوّر وجبتك" : "Photograph your meal"}</strong>
+            <small>{file
+              ? file.name
+              : ar ? "اضغط لفتح الكاميرا أو اختيار صورة" : "Tap to open camera or choose a photo"}</small>
+          </span>
           <input
             type="file"
             accept="image/*"
@@ -209,30 +238,17 @@ export default function AI({
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
         </label>
-        {file && (
-          <p>
-            {file.name}{" "}
-            <button type="button" onClick={() => setFile(null)}>
-              ×
-            </button>
-          </p>
-        )}
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-          />
+        {file && <button className="text-button" type="button" onClick={() => setFile(null)}>{ar ? "إزالة الصورة" : "Remove photo"}</button>}
+        <p className="ai-privacy-note">
           {ar
-            ? "أوافق على إرسال الصورة والوصف إلى Gemini لتحليلها. قد تستخدم الخطة المجانية المحتوى لتحسين خدمات Google."
-            : "I agree to send the image and description to Gemini. The free tier may use content to improve Google services."}
-        </label>
+            ? "بالضغط على «حلّل الصورة» تُرسل الصورة والوصف إلى Gemini لمعالجتهما. لا تُحفظ الصورة في حسابك."
+            : "Selecting Analyze sends the image and description to Gemini for processing. The image is not saved to your account."}
+        </p>
         <button
           className="primary"
           disabled={
             busy ||
             !apiConfigured ||
-            !consent ||
             !file ||
             (mode === "meal" && !prompt.trim())
           }
@@ -242,7 +258,7 @@ export default function AI({
               ? "جارٍ التحليل…"
               : "Analyzing…"
             : ar
-              ? "إرسال للتحليل"
+              ? "حلّل الصورة"
               : "Analyze"}
         </button>
       </form>

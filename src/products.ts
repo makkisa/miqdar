@@ -134,17 +134,33 @@ export function parseFDC(food: Record<string, unknown>): Product {
   };
   const energyKcal = find(1008, /energy/i);
   const energyKj = find(1062, /energy.*kj/i);
-  const protein = find(1003, /protein/i);
-  const carbs = find(1005, /carbohydrate/i);
-  const fat = find(1004, /total lipid|total fat/i);
-  const kcal = energyKcal ?? (energyKj === null ? null : energyKj / 4.184);
+  const branded = food.dataType === "Branded";
+  const servingSize = numeric(food.servingSize);
+  const servingUnit = String(food.servingSizeUnit ?? "").toLowerCase();
+  // USDA branded-label nutrients are per serving. Convert only when the
+  // serving's mass/volume is explicit; never assume ml equals grams.
+  const scaleFactor = branded && servingSize && ["g", "ml"].includes(servingUnit)
+    ? 100 / servingSize
+    : branded
+      ? null
+      : 1;
+  const scaleValue = (value: number | null) =>
+    value === null || scaleFactor === null ? null : value * scaleFactor;
+  const protein = scaleValue(find(1003, /protein/i));
+  const carbs = scaleValue(find(1005, /carbohydrate/i));
+  const fat = scaleValue(find(1004, /total lipid|total fat/i));
+  const kcal = scaleValue(
+    energyKcal ?? (energyKj === null ? null : energyKj / 4.184),
+  );
   const id = String(food.fdcId ?? "");
   const name = String(food.description ?? "").trim();
+  const gtin = String(food.gtinUpc ?? "").trim();
   return {
     id: `fdc-${id || crypto.randomUUID()}`,
+    barcode: gtin || undefined,
     name: name || "FoodData Central item",
     brand: String(food.brandOwner ?? food.brandName ?? "").trim() || undefined,
-    basis: "g",
+    basis: branded && servingUnit === "ml" ? "ml" : "g",
     nutrients: {
       ...emptyNutrients(),
       kcal: kcal ?? (protein !== null && carbs !== null && fat !== null
@@ -154,7 +170,9 @@ export function parseFDC(food: Record<string, unknown>): Product {
       carbs,
       fat,
     },
-    source: "USDA FoodData Central",
+    source: branded
+      ? "USDA FoodData Central · branded label"
+      : "USDA FoodData Central",
     favorite: false,
     lastQuantity: 100,
     portion: null,
@@ -180,6 +198,37 @@ export async function lookup(code: string, signal?: AbortSignal) {
       product.barcode = code;
       return product;
     }
+  }
+  // USDA FDC also contains commercial UPC/GTIN records. Search it only after
+  // the direct OFF lookup, then require an exact GTIN match before returning.
+  try {
+    const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search");
+    url.searchParams.set("api_key", "DEMO_KEY");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: code, dataType: ["Branded"], pageSize: 25 }),
+      signal,
+    });
+    if (response.ok) {
+      const result = (await response.json()) as {
+        foods?: Record<string, unknown>[];
+      };
+      const normalizeGTIN = (value: string) => value.replace(/^0+/, "") || "0";
+      const exact = (result.foods ?? []).find((food) => {
+        const gtin = String(food.gtinUpc ?? "");
+        return gtin && normalizeGTIN(gtin) === normalizeGTIN(code);
+      });
+      if (exact) {
+        performance.measure("product-lookup", "product-start");
+        const product = parseFDC(exact);
+        product.barcode = code;
+        return product;
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // USDA is a fallback; an unavailable API must not block manual entry.
   }
   performance.measure("product-lookup", "product-start");
   return null;
@@ -252,7 +301,7 @@ async function searchUSDA(query: string, signal: AbortSignal): Promise<Product[]
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query,
-      dataType: ["Foundation", "SR Legacy", "Survey"],
+      dataType: ["Foundation", "SR Legacy", "Survey", "Branded"],
       pageSize: 20,
     }),
     signal,

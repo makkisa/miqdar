@@ -676,6 +676,11 @@ export default function App() {
                                         )}{" "}
                                         kcal
                                       </small>
+                                      <small className="food-source">
+                                        {t("المصدر: ", "Source: ")}{e.product.source === "manual"
+                                          ? t("إدخال يدوي", "Manual entry")
+                                          : e.product.source}
+                                      </small>
                                     </div>
                                     <button
                                       aria-label={t("تعديل", "Edit")}
@@ -876,8 +881,8 @@ export default function App() {
                     !barcodeProduct && (
                       <p className="notice" role="status">
                         {t(
-                          "لم نجد نتيجة موثوقة مكتملة. جرّب صياغة أخرى أو صوّر الملصق الغذائي.",
-                          "No reliable complete match. Try another search phrase or photograph the nutrition label.",
+                          "لم نجد تطابقًا كاملًا ببيانات موثوقة في Open Food Facts أو USDA. لا نعرض تخمينًا من رقم الباركود؛ ابحث باسم المنتج أو صوّر الملصق.",
+                          "No complete, reliable match was found in Open Food Facts or USDA. We do not guess from a barcode; search by product name or photograph the label.",
                         )}
                       </p>
                     )}
